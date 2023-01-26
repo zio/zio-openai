@@ -183,7 +183,9 @@ object TypeDefinition {
               if (format == "binary") {
                 Binary
               } else {
-                val enum = Option(schema.getEnum).map(_.asScala.toList.asInstanceOf[List[String]]).getOrElse(Nil)
+                val enum = Option(schema.getEnum)
+                  .map(_.asScala.toList.asInstanceOf[List[String]])
+                  .getOrElse(Nil)
                 if (enum.nonEmpty) {
                   Enum(name, enum)
                 } else {

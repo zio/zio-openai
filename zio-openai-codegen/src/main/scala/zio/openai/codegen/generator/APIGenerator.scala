@@ -108,12 +108,16 @@ trait APIGenerator {
         val queryParams =
           if (hasOptionalQueryParams) {
             val optionalPairs = queryParameters.map { param =>
-              q"""${param.paramName}.map { value => (${Lit.String(param.name)}, ${Types.encoders.term}.toURLSegment(value)) }"""
+              q"""${param.paramName}.map { value => (${Lit.String(
+                param.name
+              )}, ${Types.encoders.term}.toURLSegment(value)) }"""
             }
             q"""${Types.zhttpQueryParams.term}(List(..$optionalPairs).flatten.map { case (k, v) => (k, ${Types.chunk_.term}(v)) }.toMap)"""
           } else {
             val pairs = queryParameters.map { param =>
-              q"""(${Lit.String(param.name)}, ${Types.encoders.term}.toURLSegment(${param.paramName}))"""
+              q"""(${Lit.String(
+                param.name
+              )}, ${Types.encoders.term}.toURLSegment(${param.paramName}))"""
             }
             q"""${Types.zhttpQueryParams.term}(..$pairs)"""
           }

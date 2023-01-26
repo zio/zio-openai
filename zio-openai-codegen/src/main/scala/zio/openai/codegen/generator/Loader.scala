@@ -4,7 +4,7 @@ import io.github.vigoo.metagen.core.GeneratorFailure
 import io.swagger.parser.OpenAPIParser
 import io.swagger.v3.parser.core.models.ParseOptions
 import zio.ZIO
-import zio.nio.file.{Files, Path}
+import zio.nio.file.{ Files, Path }
 import zio.openai.codegen.model.Model
 
 import java.nio.charset.StandardCharsets

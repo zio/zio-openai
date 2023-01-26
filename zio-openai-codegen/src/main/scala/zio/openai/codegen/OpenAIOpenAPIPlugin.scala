@@ -18,7 +18,7 @@ object OpenAIOpenAPIPlugin extends AutoPlugin {
 
   override def projectSettings: Seq[Def.Setting[_]] =
     Seq(
-      openAIVersion := "master",
+      openAIVersion    := "master",
       getOpenAIOpenAPI := getOpenAIOpenAPITask.value
     )
 

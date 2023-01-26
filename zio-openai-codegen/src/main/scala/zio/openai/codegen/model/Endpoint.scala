@@ -1,7 +1,7 @@
 package zio.openai.codegen.model
 
 import io.github.vigoo.metagen.core.ScalaType
-import zio.openai.codegen.model.Parameter.{PathParameter, QueryParameter}
+import zio.openai.codegen.model.Parameter.{ PathParameter, QueryParameter }
 
 import scala.meta.Term
 
@@ -34,6 +34,6 @@ final case class Endpoint(
   def bodyContentTypeAsString: String =
     body match {
       case Some(RequestBody(contentType, _)) => contentType.asString
-      case None => ContentType.`application/json`.asString
+      case None                              => ContentType.`application/json`.asString
     }
 }
