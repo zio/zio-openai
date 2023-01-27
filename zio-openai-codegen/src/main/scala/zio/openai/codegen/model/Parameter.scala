@@ -39,7 +39,7 @@ object Parameter {
         PathParameter(
           name,
           Option(pathParam.getDescription),
-          TypeDefinition.from(parent + "_" + name, pathParam.getSchema),
+          TypeDefinition.from(parent + "_" + name, name, pathParam.getSchema),
           Option(pathParam.getRequired).exists(_.booleanValue())
         )
       case queryParam: parameters.QueryParameter =>
@@ -47,7 +47,7 @@ object Parameter {
         QueryParameter(
           name,
           Option(queryParam.getDescription),
-          TypeDefinition.from(parent + "_" + name, queryParam.getSchema),
+          TypeDefinition.from(parent + "_" + name, name, queryParam.getSchema),
           Option(queryParam.getRequired).exists(_.booleanValue())
         )
       case _                                     =>

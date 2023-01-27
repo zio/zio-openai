@@ -4,7 +4,15 @@ import zio.openai.codegen.generator.Naming.toCamelCase
 
 import scala.meta.Term
 
-final case class Field(name: String, typ: TypeDefinition, isRequired: Boolean, isNullable: Boolean) {
+final case class Field(
+  name: String,
+  typ: TypeDefinition,
+  isRequired: Boolean,
+  isNullable: Boolean
+) {
   val scalaName: String = toCamelCase(name)
   val scalaNameTerm: Term.Name = Term.Name(scalaName)
+
+  def transformEnums(f: TypeDefinition.Enum => TypeDefinition.Enum): Field =
+    copy(typ = typ.transformEnums(f))
 }

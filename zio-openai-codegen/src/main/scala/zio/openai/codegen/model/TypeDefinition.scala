@@ -3,8 +3,7 @@ package zio.openai.codegen.model
 import io.github.vigoo.metagen.core.ScalaType
 import io.swagger.v3.oas.models.media.Schema
 import zio.openai.codegen.generator.Naming.toPascalCase
-import zio.openai.codegen.generator.{Packages, Types}
-import zio.openai.codegen.model
+import zio.openai.codegen.generator.{ Packages, Types }
 
 import scala.jdk.CollectionConverters.*
 
@@ -13,6 +12,27 @@ sealed trait TypeDefinition {
   val description: Option[String]
 
   def scalaType(model: Model): ScalaType
+
+  def transformEnums(f: TypeDefinition.Enum => TypeDefinition.Enum): TypeDefinition =
+    this match {
+      case TypeDefinition.Object(name, description, fields)       =>
+        TypeDefinition.Object(name, description, fields.map(_.transformEnums(f)))
+      case TypeDefinition.PrimitiveBoolean                        => this
+      case TypeDefinition.PrimitiveString                         => this
+      case TypeDefinition.ConstrainedString(minLength, maxLength) => this
+      case TypeDefinition.Binary                                  => this
+      case TypeDefinition.PrimitiveInteger                        => this
+      case TypeDefinition.ConstrainedInteger(min, max)            => this
+      case TypeDefinition.PrimitiveNumber                         => this
+      case TypeDefinition.ConstrainedNumber(min, max)             => this
+      case TypeDefinition.Array(itemType)                         => this
+      case TypeDefinition.NonEmptyArray(itemType)                 => this
+      case TypeDefinition.ConstrainedArray(itemType, min, max)    => this
+      case TypeDefinition.Alternatives(name, alternatives)        =>
+        TypeDefinition.Alternatives(name, alternatives.map(_.transformEnums(f)))
+      case e @ TypeDefinition.Enum(name, directName, values)      => f(e)
+      case TypeDefinition.Ref(name)                               => this
+    }
 }
 
 object TypeDefinition {
@@ -131,7 +151,8 @@ object TypeDefinition {
     }
   }
 
-  final case class Enum(name: String, values: List[String]) extends TypeDefinition {
+  final case class Enum(name: String, directName: String, values: List[String])
+      extends TypeDefinition {
     override val description: Option[String] = None
 
     val scalaName: String = toPascalCase(name)
@@ -149,7 +170,7 @@ object TypeDefinition {
     }
   }
 
-  def from(name: String, schema: Schema[?]): TypeDefinition =
+  def from(name: String, directName: String, schema: Schema[?]): TypeDefinition =
     Option(schema.get$ref()) match {
       case Some(ref) => Ref(ref)
       case None      =>
@@ -159,7 +180,7 @@ object TypeDefinition {
           Alternatives(
             name,
             oneOf.zipWithIndex.map { case (schema, idx) =>
-              TypeDefinition.from(name + "_case" + idx, schema)
+              TypeDefinition.from(name + "_case" + idx, "case" + idx, schema)
             }.toList
           )
         } else {
@@ -174,7 +195,7 @@ object TypeDefinition {
                 props.map { case (fieldName, fieldSchema) =>
                   Field(
                     fieldName,
-                    TypeDefinition.from(name + "_" + fieldName, fieldSchema),
+                    TypeDefinition.from(name + "_" + fieldName, fieldName, fieldSchema),
                     reqd.contains(fieldName),
                     Option(fieldSchema.getNullable).exists(_.booleanValue())
                   )
@@ -194,7 +215,7 @@ object TypeDefinition {
                   .map(_.asScala.toList.asInstanceOf[List[String]])
                   .getOrElse(Nil)
                 if (enum.nonEmpty) {
-                  Enum(name, enum)
+                  Enum(name, directName, enum)
                 } else {
                   val minLength = Option(schema.getMinLength).map(_.intValue())
                   val maxLength = Option(schema.getMaxLength).map(_.intValue())
@@ -236,12 +257,12 @@ object TypeDefinition {
             case "array" =>
               val minItems = Option(schema.getMinItems).map(_.intValue()).getOrElse(0)
               if (minItems == 0) {
-                Array(TypeDefinition.from(name + "_" + "item", schema.getItems))
+                Array(TypeDefinition.from(name + "_" + "item", "item", schema.getItems))
               } else if (minItems == 1) {
-                NonEmptyArray(TypeDefinition.from(name + "_" + "item", schema.getItems))
+                NonEmptyArray(TypeDefinition.from(name + "_" + "item", "item", schema.getItems))
               } else {
                 ConstrainedArray(
-                  TypeDefinition.from(name + "_" + "item", schema.getItems),
+                  TypeDefinition.from(name + "_" + "item", "item", schema.getItems),
                   minItems,
                   Option(schema.getMaxItems).map(_.intValue()).getOrElse(Int.MaxValue)
                 )
