@@ -12,7 +12,7 @@ import scala.meta.*
 // TODO: precalculate Paths when possible and store them in private vals
 
 trait APIGenerator {
-  this: HasParameters =>
+  this: HasParameters & ModelGenerator =>
   def generateServices(
     model: Model
   ): ZIO[Any, GeneratorFailure[OpenAIGeneratorFailure], Set[Path]] = {
@@ -40,14 +40,40 @@ trait APIGenerator {
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] = {
     val svc = ScalaType(Packages.openai, api.name)
 
-    val interfaceMethods =
-      api.endpoints.map { endpoint =>
+    val interfaceMethods: List[Stat] =
+      api.endpoints.flatMap { endpoint =>
         val paramList = getParamList(model, endpoint)
         val responseType = endpoint.responseType(model)
         val base: Decl.Def =
           q"def ${endpoint.methodName}(..$paramList): ${Types.zio(ScalaType.any, Types.throwable, responseType).typ}"
-        if (endpoint.isDeprecated) base.copy(mods = Mod.Annot(init"deprecated()") :: base.mods)
-        else base
+
+        endpoint.hasSingleBodyParameter(model) match {
+          case Some(obj) =>
+            val cons = endpoint.body.get.typ.scalaType(model).term
+            val fieldList = getObjectFieldsAsParams(model, obj)
+            val fieldNames = obj.fields.map(_.scalaName).map(Term.Name(_))
+            val flat: Defn.Def =
+              q"""def ${endpoint.methodName}(..$fieldList): ${Types
+                .zio(ScalaType.any, Types.throwable, responseType)
+                .typ} =
+                  ${endpoint.methodName}($cons(..$fieldNames))
+             """
+
+            List[Stat](
+              if (endpoint.isDeprecated)
+                base.copy(mods = Mod.Annot(init"deprecated()") :: base.mods)
+              else base,
+              if (endpoint.isDeprecated)
+                flat.copy(mods = Mod.Annot(init"deprecated()") :: flat.mods)
+              else flat
+            )
+          case None      =>
+            List(
+              if (endpoint.isDeprecated)
+                base.copy(mods = Mod.Annot(init"deprecated()") :: base.mods)
+              else base
+            )
+        }
       }
 
     val accessorMethods =

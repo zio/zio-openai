@@ -1,11 +1,14 @@
 package zio.openai.codegen.model
 
-import io.swagger.v3.oas.models.{Operation, PathItem}
-import zio.openai.codegen.generator.Naming.{toCamelCase, toPascalCase}
+import io.swagger.v3.oas.models.{ Operation, PathItem }
+import zio.openai.codegen.generator.Naming.{ toCamelCase, toPascalCase }
 
 import scala.jdk.CollectionConverters.*
 
-final case class API(name: String, endpoints: List[Endpoint])
+final case class API(name: String, endpoints: List[Endpoint]) {
+  def transformEnums(f: TypeDefinition.Enum => TypeDefinition.Enum): API =
+    copy(endpoints = endpoints.map(_.transformEnums(f)))
+}
 
 object API {
   def fromPaths(paths: Map[String, PathItem]): List[API] = {
@@ -77,7 +80,11 @@ object API {
                 ResponseBody(
                   contentType,
                   TypeDefinition
-                    .from(s"${group}_${op.getOperationId}_response", "response", contentSpec.getSchema)
+                    .from(
+                      s"${group}_${op.getOperationId}_response",
+                      "response",
+                      contentSpec.getSchema
+                    )
                 )
               }
 

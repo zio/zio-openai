@@ -36,4 +36,23 @@ final case class Endpoint(
       case Some(RequestBody(contentType, _)) => contentType.asString
       case None                              => ContentType.`application/json`.asString
     }
+
+  def hasSingleBodyParameter(model: Model): Option[TypeDefinition.Object] =
+    if (parameters.nonEmpty) None
+    else
+      body.flatMap {
+        case RequestBody(_, obj: TypeDefinition.Object) => Some(obj)
+        case RequestBody(_, ref: TypeDefinition.Ref)    =>
+          model.finalTypes.get(ref.referencedName).collect { case obj: TypeDefinition.Object =>
+            obj
+          }
+        case _                                          => None
+      }
+
+  def transformEnums(f: TypeDefinition.Enum => TypeDefinition.Enum): Endpoint =
+    copy(
+      parameters = parameters.map(_.transformEnums(f)),
+      body = body.map(_.transformEnums(f)),
+      response = response.map(_.transformEnums(f))
+    )
 }

@@ -164,10 +164,10 @@ object TypeDefinition {
   final case class Ref(name: String) extends TypeDefinition {
     override val description: Option[String] = None
 
-    override def scalaType(model: Model): ScalaType = {
-      val referencedName = name.stripPrefix("#/components/schemas/")
+    val referencedName = name.stripPrefix("#/components/schemas/")
+
+    override def scalaType(model: Model): ScalaType =
       model.types(referencedName).scalaType(model)
-    }
   }
 
   def from(name: String, directName: String, schema: Schema[?]): TypeDefinition =

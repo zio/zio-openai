@@ -6,13 +6,16 @@ import scala.jdk.CollectionConverters.*
 
 final case class Model(
   types: Map[String, TypeDefinition],
-  apis: List[API]
+  initialAPIs: List[API]
 ) {
   private lazy val allTypes: Map[String, TypeDefinition] =
     Model.collectReferencedTypes(types.values.toSeq)
 
-  private lazy val finalTypes: Map[String, TypeDefinition] =
+  lazy val finalTypes: Map[String, TypeDefinition] =
     allTypes.mapValues(_.transformEnums(enumMapping))
+
+  lazy val apis: List[API] =
+    initialAPIs.map(_.transformEnums(enumMapping))
 
   lazy val objects: List[TypeDefinition.Object] =
     finalTypes.collect { case (_, o: TypeDefinition.Object) =>

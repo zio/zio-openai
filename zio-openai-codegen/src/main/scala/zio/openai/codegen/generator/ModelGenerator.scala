@@ -47,6 +47,17 @@ trait ModelGenerator { this: HasParameters =>
     )
   }
 
+  protected def getObjectFieldsAsParams(model: Model, obj: TypeDefinition.Object) =
+    obj.fields.map { field =>
+      val fieldType = field.typ.scalaType(model)
+      val fieldName = field.scalaNameTerm
+
+      if (field.isNullable || !field.isRequired)
+        param"$fieldName: ${ScalaType.option(fieldType).typ}"
+      else
+        param"$fieldName: ${fieldType.typ}"
+    }
+
   private def generateObjectClass(
     model: Model,
     obj: TypeDefinition.Object
@@ -54,16 +65,7 @@ trait ModelGenerator { this: HasParameters =>
 
     val typ = obj.scalaType(model)
 
-    val fields =
-      obj.fields.map { field =>
-        val fieldType = field.typ.scalaType(model)
-        val fieldName = field.scalaNameTerm
-
-        if (field.isNullable || !field.isRequired)
-          param"$fieldName: ${ScalaType.option(fieldType).typ}"
-        else
-          param"$fieldName: ${fieldType.typ}"
-      }
+    val fields = getObjectFieldsAsParams(model, obj)
 
     val caseClassName = ScalaType(Packages.zioSchema / "Schema", s"CaseClass${fields.size}")
 
@@ -75,7 +77,9 @@ trait ModelGenerator { this: HasParameters =>
             ${Lit.String(field.name)},
             ${Types.schema_.term}[${ScalaType.option(fieldType).typ}],
             get0 = obj => obj.${field.scalaNameTerm},
-            set0 = (obj: ${typ.typ}, v: ${ScalaType.option(fieldType).typ}) => obj.copy(${field.scalaNameTerm} = v)
+            set0 = (obj: ${typ.typ}, v: ${ScalaType
+          .option(fieldType)
+          .typ}) => obj.copy(${field.scalaNameTerm} = v)
        )"""
       else
         q"""${Types.schemaField.term}(
