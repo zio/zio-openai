@@ -8,12 +8,12 @@ import zio.openai.codegen.model.{ Model, TypeDefinition }
 import scala.meta.*
 
 // TODO: collect duplicate enums and generate a single top level type from them
-// TODO: snake case to pascal case
 // TODO: generate alternatives to their parent's companion objects with shorter name
 // TODO: constrained types should be mapped to zio-prelude newtypes
 // TODO: add scaladoc support to metagen and use the description field
 // TODO: better case names than CaseN
 // TODO: field descriptions
+// TODO: check what to do with the types with not enough info in openAPI (generated as empty case classes)
 
 trait ModelGenerator { this: HasParameters =>
   def generateModels(
@@ -26,19 +26,19 @@ trait ModelGenerator { this: HasParameters =>
         objs  <- ZIO.foreach(model.objects) { obj =>
                    Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
                      Packages.models,
-                     obj.name
+                     obj.scalaName
                    )(generateObjectClass(model, obj))
                  }
         alts  <- ZIO.foreach(model.alternatives) { alt =>
                    Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
                      Packages.models,
-                     alt.name
+                     alt.scalaName
                    )(generateAlternativesTrait(model, alt))
                  }
         enums <- ZIO.foreach(model.enums) { enum =>
                    Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
                      Packages.models,
-                     enum.name
+                     enum.scalaName
                    )(generateEnumTrait(model, enum))
                  }
       } yield objs.toSet ++ alts.toSet ++ enums.toSet
@@ -58,7 +58,7 @@ trait ModelGenerator { this: HasParameters =>
     val fields =
       obj.fields.map { field =>
         val fieldType = field.typ.scalaType(model)
-        val fieldName = Term.Name(field.name)
+        val fieldName = field.scalaNameTerm
 
         if (field.isNullable || !field.isRequired)
           param"$fieldName: ${ScalaType.option(fieldType).typ}"
@@ -75,24 +75,22 @@ trait ModelGenerator { this: HasParameters =>
         q"""${Types.schemaField.term}(
             ${Lit.String(field.name)},
             ${Types.schema_.term}[${ScalaType.option(fieldType).typ}],
-            get0 = obj => obj.${Term.Name(field.name)},
-            set0 = (obj: ${typ.typ}, v: ${ScalaType.option(fieldType).typ}) => obj.copy(${Term.Name(
-          field.name
-        )} = v)
+            get0 = obj => obj.${field.scalaNameTerm},
+            set0 = (obj: ${typ.typ}, v: ${ScalaType.option(fieldType).typ}) => obj.copy(${field.scalaNameTerm} = v)
        )"""
       else
         q"""${Types.schemaField.term}(
             ${Lit.String(field.name)},
             ${Types.schema_.term}[${fieldType.typ}],
-            get0 = obj => obj.${Term.Name(field.name)},
-            set0 = (obj: ${typ.typ}, v: ${fieldType.typ}) => obj.copy(${Term.Name(field.name)} = v)
+            get0 = obj => obj.${field.scalaNameTerm},
+            set0 = (obj: ${typ.typ}, v: ${fieldType.typ}) => obj.copy(${field.scalaNameTerm} = v)
        )"""
     }
     val schema =
       q"""${caseClassName.term}(
          ${Types.typeId.term}.parse(${Lit.String(typ.asString)}),
          ..$fieldSchemas,
-         (..$fields) => ${typ.termName}(..${obj.fields.map(field => Term.Name(field.name))})
+         (..$fields) => ${typ.termName}(..${obj.fields.map(field => field.scalaNameTerm)})
        )"""
 
     ZIO.succeed {

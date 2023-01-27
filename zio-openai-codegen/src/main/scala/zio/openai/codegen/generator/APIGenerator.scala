@@ -7,7 +7,6 @@ import zio.openai.codegen.model.{ API, ContentType, Endpoint, Model, RequestBody
 
 import scala.meta.*
 
-// TODO: Proper casing for types and methods
 // TODO: inline 'body' if it is the only parameter (make this an option)
 // TODO: mark whole service as deprecated if all endpoints are deprecated (+option to not generate those)
 // TODO: precalculate Paths when possible and store them in private vals

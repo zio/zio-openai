@@ -1,6 +1,7 @@
 package zio.openai.codegen.model
 
-import io.swagger.v3.oas.models.{ Operation, PathItem }
+import io.swagger.v3.oas.models.{Operation, PathItem}
+import zio.openai.codegen.generator.Naming.{toCamelCase, toPascalCase}
 
 import scala.jdk.CollectionConverters.*
 
@@ -38,7 +39,7 @@ object API {
       .groupBy(_._1)
       .map { case (group, endpoints) =>
         API(
-          group,
+          toPascalCase(group),
           endpoints.map { case (_, path, method, op) =>
             val parameterSpecs = Option(op.getParameters).map(_.asScala.toList).getOrElse(Nil)
             val parameters = parameterSpecs.map { spec =>
@@ -81,7 +82,7 @@ object API {
               }
 
             Endpoint(
-              op.getOperationId,
+              toCamelCase(op.getOperationId),
               method,
               path,
               Option(op.getDeprecated).exists(_.booleanValue()),

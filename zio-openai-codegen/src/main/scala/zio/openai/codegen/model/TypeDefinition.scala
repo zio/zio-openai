@@ -2,7 +2,8 @@ package zio.openai.codegen.model
 
 import io.github.vigoo.metagen.core.ScalaType
 import io.swagger.v3.oas.models.media.Schema
-import zio.openai.codegen.generator.{ Packages, Types }
+import zio.openai.codegen.generator.Naming.toPascalCase
+import zio.openai.codegen.generator.{Packages, Types}
 import zio.openai.codegen.model
 
 import scala.jdk.CollectionConverters.*
@@ -18,8 +19,10 @@ object TypeDefinition {
   final case class Object(name: String, description: Option[String], fields: List[Field])
       extends TypeDefinition {
 
+    val scalaName: String = toPascalCase(name)
+
     override def scalaType(model: Model): ScalaType =
-      ScalaType(Packages.models, name)
+      ScalaType(Packages.models, scalaName)
   }
 
   final case object PrimitiveBoolean extends TypeDefinition {
@@ -115,8 +118,10 @@ object TypeDefinition {
       extends TypeDefinition {
     override val description: Option[String] = None
 
+    val scalaName: String = toPascalCase(name)
+
     override def scalaType(model: Model): ScalaType =
-      ScalaType(Packages.models, name)
+      ScalaType(Packages.models, scalaName)
 
     def constructors(model: Model): List[(ScalaType, TypeDefinition)] = {
       val typ = scalaType(model)
@@ -129,8 +134,10 @@ object TypeDefinition {
   final case class Enum(name: String, values: List[String]) extends TypeDefinition {
     override val description: Option[String] = None
 
+    val scalaName: String = toPascalCase(name)
+
     override def scalaType(model: Model): ScalaType =
-      ScalaType(Packages.models, name)
+      ScalaType(Packages.models, scalaName)
   }
 
   final case class Ref(name: String) extends TypeDefinition {
