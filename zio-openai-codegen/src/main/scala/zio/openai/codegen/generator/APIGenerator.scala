@@ -7,7 +7,6 @@ import zio.openai.codegen.model.{ API, ContentType, Endpoint, Model, RequestBody
 
 import scala.meta.*
 
-// TODO: multipart/formdata
 // TODO: Proper casing for types and methods
 // TODO: inline 'body' if it is the only parameter (make this an option)
 // TODO: mark whole service as deprecated if all endpoints are deprecated (+option to not generate those)
@@ -132,20 +131,27 @@ trait APIGenerator {
           endpoint.body match {
             case Some(RequestBody(ContentType.`application/json`, typ))    =>
               val bodyType = typ.scalaType(model)
-              q"""${Types.encoders.term}.toJsonBody[${bodyType.typ}](this.codecs, $bodyParam)"""
+              q"""${Types.zio_.term}.succeed(${Types.encoders.term}.toJsonBody[${bodyType.typ}](this.codecs, $bodyParam))"""
             case Some(RequestBody(ContentType.`multipart/form-data`, typ)) =>
-              q"""${Types.zhttpBody.term}.empty""" // TODO
+              val bodyType = typ.scalaType(model)
+              q"""${Types.zio_.term}.fromEither(${Types.encoders.term}.toMultipartFormDataBody[${bodyType.typ}]($bodyParam, this.boundary))
+                      .mapError(new java.lang.RuntimeException(_))
+               """
             case None                                                      =>
-              q"""${Types.zhttpBody.term}.empty"""
+              q"""${Types.zio_.term}.succeed(${Types.zhttpBody.term}.empty)"""
           }
 
-        val contentType = Lit.String(endpoint.bodyContentTypeAsString)
+        val contentType =
+          if (endpoint.body.exists(_.contentType == ContentType.`multipart/form-data`))
+            q"""${Lit.String(endpoint.bodyContentTypeAsString)}+"; boundary="+this.boundary"""
+          else
+            Lit.String(endpoint.bodyContentTypeAsString)
 
         val request =
           q"""${Types.zhttpRequest.term}.default(
              method = ${endpoint.method.constructor.term},
              url = $url,
-             body = $body
+             body = body
            ).addHeader(${Types.zhttpHeaderNames.term}.authorization, authHeaderValue)
             .addHeader(${Types.zhttpHeaderNames.term}.contentType, $contentType)
            """
@@ -167,8 +173,10 @@ trait APIGenerator {
           q"""def ${endpoint.methodName}(..$paramList): ${Types
             .zio(ScalaType.any, Types.throwable, responseType)
             .typ} =
-                client.request($request).flatMap { response =>
-                  $mapResponse
+                $body.flatMap { body =>
+                  client.request($request).flatMap { response =>
+                    $mapResponse
+                  }
                 }
           """
 
@@ -197,7 +205,7 @@ trait APIGenerator {
         """
 
     val liveClass =
-      q"""class Live(client: ${Types.zhttpClient.typ}, baseURL: ${Types.zhttpURL.typ}, apiKey: ${Types.secret.typ}) extends ${svc.init} {
+      q"""class Live(client: ${Types.zhttpClient.typ}, baseURL: ${Types.zhttpURL.typ}, apiKey: ${Types.secret.typ}, boundary: String) extends ${svc.init} {
             private val authHeaderValue = "Bearer " + apiKey.value.mkString
 
             $codecs
@@ -218,9 +226,10 @@ trait APIGenerator {
           def live: ${Types.zlayer(Types.zhttpClient, ScalaType.nothing, svc).typ} =
             ${Types.zlayer_.term} {
               for {
-                client <- ZIO.service[${Types.zhttpClient.typ}]
-                config <- ZIO.config(${Types.openAIConfig.term}.config).orDie
-              } yield new Live(client, config.baseURL, config.apiKey)
+                client <- ${Types.zio_.term}.service[${Types.zhttpClient.typ}]
+                config <- ${Types.zio_.term}.config(${Types.openAIConfig.term}.config).orDie
+                boundary <- ${Types.random.term}.nextUUID.map(uuid => "--------" + uuid.toString.replace("-", ""))
+              } yield new Live(client, config.baseURL, config.apiKey, boundary)
             }
 
           ..$accessorMethods

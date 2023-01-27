@@ -37,6 +37,7 @@ object Types {
   val zhttpURL: ScalaType = ScalaType(Packages.zioHttp, "URL")
   val zhttpQueryParams: ScalaType = ScalaType(Packages.zioHttp, "QueryParams")
 
+  val random = ScalaType(Packages.zio, "Random")
   def zio(r: ScalaType, e: ScalaType, a: ScalaType): ScalaType =
     ScalaType(Packages.zio, "ZIO", r, e, a)
   val zio_ : ScalaType = ScalaType(Packages.zio, "ZIO")
