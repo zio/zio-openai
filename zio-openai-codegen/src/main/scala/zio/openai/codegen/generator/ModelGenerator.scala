@@ -7,7 +7,6 @@ import zio.openai.codegen.model.{ Model, TypeDefinition }
 
 import scala.meta.*
 
-// TODO: collect duplicate enums and generate a single top level type from them
 // TODO: generate alternatives to their parent's companion objects with shorter name
 // TODO: constrained types should be mapped to zio-prelude newtypes
 // TODO: add scaladoc support to metagen and use the description field
