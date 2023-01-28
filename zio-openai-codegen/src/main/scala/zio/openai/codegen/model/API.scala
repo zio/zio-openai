@@ -6,8 +6,8 @@ import zio.openai.codegen.generator.Naming.{ toCamelCase, toPascalCase }
 import scala.jdk.CollectionConverters.*
 
 final case class API(name: String, endpoints: List[Endpoint]) {
-  def transformEnums(f: TypeDefinition.Enum => TypeDefinition.Enum): API =
-    copy(endpoints = endpoints.map(_.transformEnums(f)))
+  def transform(f: TypeDefinition => TypeDefinition): API =
+    copy(endpoints = endpoints.map(_.transform(f)))
 }
 
 object API {

@@ -8,7 +8,7 @@ import zio.{ Chunk, NonEmptyChunk }
 import java.util.Base64
 import scala.collection.immutable.ListMap
 
-package object model {
+package object internal {
 
   implicit def nonEmptyChunkSchema[A: Schema]: Schema[NonEmptyChunk[A]] =
     Schema

@@ -7,7 +7,6 @@ import zio.openai.codegen.model.{ Field, Model, TypeDefinition }
 
 import scala.meta.*
 
-// TODO: see if the enum unification trick can be used for objects and alternatives too
 // TODO: add scaladoc support to metagen and use the description field
 // TODO: verify that non-required vs required-nullable works properly
 
@@ -43,13 +42,13 @@ trait ModelGenerator { this: HasParameters =>
                         enum.scalaName
                       )(generateTopLevelEnumTrait(model, enum))
                     }
-        newtypes <- ZIO.foreach(model.smartNewTypes.filter(_.isTopLevel)) { typ =>
-                      Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
-                        Packages.models,
-                        typ.scalaName
-                      )(generateTopLevelSmartNewType(model, typ))
-                    }
-      } yield objs.toSet ++ dynObjs.toSet ++ alts.toSet ++ enums.toSet
+        newtypes <-
+          Generator.generateScalaPackageObject[Any, OpenAIGeneratorFailure](
+            Packages.openai,
+            "model"
+          )(generateTopLevelSmartNewTypes(model, model.smartNewTypes.filter(_.isTopLevel)))
+
+      } yield objs.toSet ++ dynObjs.toSet ++ alts.toSet ++ enums.toSet ++ Set(newtypes)
 
     generate.provide(
       Generator.live
@@ -73,7 +72,7 @@ trait ModelGenerator { this: HasParameters =>
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] =
     generateObjectClass(model, obj).map { cls =>
       q"""
-     import zio.openai.model.nonEmptyChunkSchema
+     import zio.openai.internal.{jsonObjectSchema, nonEmptyChunkSchema}
 
      ..$cls
      """
@@ -152,7 +151,7 @@ trait ModelGenerator { this: HasParameters =>
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] =
     generateDynamicObjectClass(model, obj).map { cls =>
       q"""
-     import zio.openai.model.{jsonObjectSchema, nonEmptyChunkSchema}
+     import zio.openai.internal.{jsonObjectSchema, nonEmptyChunkSchema}
 
      ..$cls
      """
@@ -231,7 +230,7 @@ trait ModelGenerator { this: HasParameters =>
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] =
     generateAlternativesTrait(model, alt).map { cls =>
       q"""
-     import zio.openai.model.nonEmptyChunkSchema
+     import zio.openai.internal.{jsonObjectSchema, nonEmptyChunkSchema}
 
      ..$cls
      """
@@ -309,7 +308,7 @@ trait ModelGenerator { this: HasParameters =>
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] =
     generateEnumTrait(model, enum).map { cls =>
       q"""
-     import zio.openai.model.nonEmptyChunkSchema
+     import zio.openai.internal.{jsonObjectSchema, nonEmptyChunkSchema}
 
      ..$cls
      """
@@ -364,17 +363,16 @@ trait ModelGenerator { this: HasParameters =>
     }
   }
 
-  def generateTopLevelSmartNewType(
+  def generateTopLevelSmartNewTypes(
     model: Model,
-    smartNewType: TypeDefinition.SmartNewType
+    smartNewTypes: List[TypeDefinition.SmartNewType]
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] =
-    generateSmartNewType(model, smartNewType).map { cls =>
-      q"""
-       import zio.openai.model.nonEmptyChunkSchema
-  
-       ..$cls
-       """
-    }
+    ZIO
+      .foreach(smartNewTypes) { smartNewType =>
+        generateSmartNewType(model, smartNewType)
+      }
+      .map(_.flatten)
+      .map(Term.Block(_))
 
   private def generateSmartNewType(
     model: Model,

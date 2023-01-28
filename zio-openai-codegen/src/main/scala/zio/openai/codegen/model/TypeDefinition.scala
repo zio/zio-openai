@@ -16,27 +16,30 @@ sealed trait TypeDefinition {
 
   def scalaType(model: Model): ScalaType
 
-  def transformEnums(f: TypeDefinition.Enum => TypeDefinition.Enum): TypeDefinition =
+  def transform(f: TypeDefinition => TypeDefinition): TypeDefinition =
     this match {
       case TypeDefinition.Object(directName, parentName, description, fields)             =>
-        TypeDefinition.Object(directName, parentName, description, fields.map(_.transformEnums(f)))
-      case TypeDefinition.PrimitiveBoolean                                                => this
-      case TypeDefinition.PrimitiveString                                                 => this
-      case TypeDefinition.ConstrainedString(directName, parentName, minLength, maxLength) => this
-      case TypeDefinition.Binary                                                          => this
-      case TypeDefinition.PrimitiveInteger                                                => this
-      case TypeDefinition.ConstrainedInteger(directName, parentName, min, max)            => this
-      case TypeDefinition.PrimitiveNumber                                                 => this
-      case TypeDefinition.ConstrainedNumber(directName, parentName, min, max)             => this
-      case TypeDefinition.Array(itemType)                                                 => this
-      case TypeDefinition.NonEmptyArray(itemType)                                         => this
-      case TypeDefinition.ConstrainedArray(itemType, min, max)                            => this
+        f(TypeDefinition.Object(directName, parentName, description, fields.map(_.transform(f))))
+      case TypeDefinition.PrimitiveBoolean                                                => f(this)
+      case TypeDefinition.PrimitiveString                                                 => f(this)
+      case TypeDefinition.ConstrainedString(directName, parentName, minLength, maxLength) => f(this)
+      case TypeDefinition.Binary                                                          => f(this)
+      case TypeDefinition.PrimitiveInteger                                                => f(this)
+      case TypeDefinition.ConstrainedInteger(directName, parentName, min, max)            => f(this)
+      case TypeDefinition.PrimitiveNumber                                                 => f(this)
+      case TypeDefinition.ConstrainedNumber(directName, parentName, min, max)             => f(this)
+      case TypeDefinition.Array(itemType)                                                 =>
+        f(TypeDefinition.Array(itemType.transform(f)))
+      case TypeDefinition.NonEmptyArray(itemType)                                         =>
+        f(TypeDefinition.NonEmptyArray(itemType.transform(f)))
+      case TypeDefinition.ConstrainedArray(itemType, min, max)                            =>
+        f(TypeDefinition.ConstrainedArray(itemType.transform(f), min, max))
       case TypeDefinition.Alternatives(directName, parentName, alternatives)              =>
-        TypeDefinition.Alternatives(directName, parentName, alternatives.map(_.transformEnums(f)))
-      case e @ TypeDefinition.Enum(name, directName, values)                              => f(e)
-      case TypeDefinition.Ref(name)                                                       => this
+        f(TypeDefinition.Alternatives(directName, parentName, alternatives.map(_.transform(f))))
+      case TypeDefinition.Enum(name, directName, values)                                  => f(this)
+      case TypeDefinition.Ref(name)                                                       => f(this)
       case TypeDefinition.DynamicObject(directName, parentName, knownFields)              =>
-        TypeDefinition.DynamicObject(directName, parentName, knownFields.map(_.transformEnums(f)))
+        f(TypeDefinition.DynamicObject(directName, parentName, knownFields.map(_.transform(f))))
     }
 }
 
@@ -70,7 +73,9 @@ object TypeDefinition {
       }.toList
   }
 
-  sealed trait SmartNewType extends TypeDefinition with NonPrimitive
+  sealed trait SmartNewType extends TypeDefinition with NonPrimitive {
+    def withoutParent: SmartNewType
+  }
 
   final case class Object(
     directName: String,
@@ -102,6 +107,9 @@ object TypeDefinition {
     maxLength: Int
   ) extends TypeDefinition with NonPrimitive with SmartNewType {
     override val description: Option[String] = None
+
+    override def withoutParent: ConstrainedString =
+      ConstrainedString(directName, None, minLength, maxLength)
   }
 
   final case object Binary extends TypeDefinition {
@@ -127,6 +135,9 @@ object TypeDefinition {
     max: Int
   ) extends TypeDefinition with NonPrimitive with SmartNewType {
     override val description: Option[String] = None
+
+    override def withoutParent: ConstrainedInteger =
+      ConstrainedInteger(directName, None, min, max)
   }
 
   final case object PrimitiveNumber extends TypeDefinition {
@@ -144,6 +155,9 @@ object TypeDefinition {
     max: Double
   ) extends TypeDefinition with NonPrimitive with SmartNewType {
     override val description: Option[String] = None
+
+    override def withoutParent: ConstrainedNumber =
+      ConstrainedNumber(directName, None, min, max)
   }
 
   final case class Array(itemType: TypeDefinition) extends TypeDefinition {

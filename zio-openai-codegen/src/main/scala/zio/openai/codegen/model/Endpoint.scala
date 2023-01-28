@@ -49,10 +49,10 @@ final case class Endpoint(
         case _                                          => None
       }
 
-  def transformEnums(f: TypeDefinition.Enum => TypeDefinition.Enum): Endpoint =
+  def transform(f: TypeDefinition => TypeDefinition): Endpoint =
     copy(
-      parameters = parameters.map(_.transformEnums(f)),
-      body = body.map(_.transformEnums(f)),
-      response = response.map(_.transformEnums(f))
+      parameters = parameters.map(_.transform(f)),
+      body = body.map(_.transform(f)),
+      response = response.map(_.transform(f))
     )
 }

@@ -16,7 +16,7 @@ sealed trait Parameter {
 
   def paramName: Term.Name = Term.Name(name)
 
-  def transformEnums(f: TypeDefinition.Enum => TypeDefinition.Enum): Parameter
+  def transform(f: TypeDefinition => TypeDefinition): Parameter
 }
 
 object Parameter {
@@ -26,8 +26,8 @@ object Parameter {
     typ: TypeDefinition,
     isRequired: Boolean
   ) extends Parameter {
-    def transformEnums(f: TypeDefinition.Enum => TypeDefinition.Enum): PathParameter =
-      copy(typ = typ.transformEnums(f))
+    def transform(f: TypeDefinition => TypeDefinition): PathParameter =
+      copy(typ = typ.transform(f))
   }
 
   final case class QueryParameter(
@@ -36,8 +36,8 @@ object Parameter {
     typ: TypeDefinition,
     isRequired: Boolean
   ) extends Parameter {
-    def transformEnums(f: TypeDefinition.Enum => TypeDefinition.Enum): QueryParameter =
-      copy(typ = typ.transformEnums(f))
+    def transform(f: TypeDefinition => TypeDefinition): QueryParameter =
+      copy(typ = typ.transform(f))
   }
 
   def from(parent: String, param: OpenAPIParameter): Parameter =

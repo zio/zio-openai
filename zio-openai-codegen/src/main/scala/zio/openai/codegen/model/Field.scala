@@ -14,6 +14,6 @@ final case class Field(
   val scalaName: String = toCamelCase(name)
   val scalaNameTerm: Term.Name = Term.Name(scalaName)
 
-  def transformEnums(f: TypeDefinition.Enum => TypeDefinition.Enum): Field =
-    copy(typ = typ.transformEnums(f))
+  def transform(f: TypeDefinition => TypeDefinition): Field =
+    copy(typ = typ.transform(f))
 }

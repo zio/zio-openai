@@ -12,10 +12,10 @@ final case class Model(
     Model.collectReferencedTypes(types.values.toSeq)
 
   lazy val finalTypes: Map[String, TypeDefinition] =
-    allTypes.mapValues(_.transformEnums(enumMapping))
+    allTypes.mapValues(_.transform(unifyTypes))
 
   lazy val apis: List[API] =
-    initialAPIs.map(_.transformEnums(enumMapping))
+    initialAPIs.map(_.transform(unifyTypes))
 
   lazy val objects: List[TypeDefinition.Object] =
     finalTypes.collect { case (_, o: TypeDefinition.Object) =>
@@ -32,10 +32,12 @@ final case class Model(
       a
     }.toList
 
-  lazy val smartNewTypes: List[TypeDefinition.SmartNewType] =
-    finalTypes.collect { case (_, a: TypeDefinition.SmartNewType) =>
-      a
-    }.toList
+  lazy val (smartNewTypes, smartNewTypeMapping) =
+    unifySmartNewTypes(
+      allTypes.collect { case (_, a: TypeDefinition.SmartNewType) =>
+        a
+      }.toList
+    )
 
   lazy val (enums, enumMapping) =
     unifyEnums(
@@ -43,6 +45,16 @@ final case class Model(
         e
       }.toList
     )
+
+  private def unifyTypes(typ: TypeDefinition): TypeDefinition =
+    typ match {
+      case e: TypeDefinition.Enum           =>
+        enumMapping(e)
+      case snt: TypeDefinition.SmartNewType =>
+        smartNewTypeMapping(snt)
+      case other                            =>
+        other
+    }
 
   private def unifyEnums(
     allEnums: List[TypeDefinition.Enum]
@@ -67,6 +79,37 @@ final case class Model(
             // This is the first duplicate enum
             val unified = TypeDefinition.Enum(enum.directName, None, enum.values)
             (unified :: result, mapping + (enum -> unified))
+        }
+      }
+    }
+  }
+
+  // TODO: merge these unify functions
+  private def unifySmartNewTypes(all: List[TypeDefinition.SmartNewType]): (
+    List[TypeDefinition.SmartNewType],
+    Map[TypeDefinition.SmartNewType, TypeDefinition.SmartNewType]
+  ) = {
+    val grouped = all.groupBy(typ => typ.withoutParent)
+    all.foldLeft(
+      (
+        List.empty[TypeDefinition.SmartNewType],
+        Map.empty[TypeDefinition.SmartNewType, TypeDefinition.SmartNewType]
+      )
+    ) { case ((result, mapping), typ) =>
+      val group = grouped(typ.withoutParent)
+      if (group.size == 1) {
+        // This is a unique enum
+        (typ :: result, mapping + (typ -> typ))
+      } else {
+        // This is a duplicate enum
+        result.find(other => other.withoutParent == typ.withoutParent) match {
+          case Some(existing) =>
+            // We already have a unified enum
+            (result, mapping + (typ -> existing))
+          case None           =>
+            // This is the first duplicate enum
+            val unified = typ.withoutParent
+            (unified :: result, mapping + (typ -> unified))
         }
       }
     }
