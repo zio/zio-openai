@@ -52,6 +52,7 @@ object Types {
 
   val openAIConfig: ScalaType = ScalaType(Packages.openai, "OpenAIConfig")
   val decoders: ScalaType = ScalaType(Packages.internal, "Decoders")
-  def dynamicObjectOf(self: ScalaType): ScalaType = ScalaType(Packages.internal, "DynamicObject", self)
+  def dynamicObjectOf(self: ScalaType): ScalaType =
+    ScalaType(Packages.internal, "DynamicObject", self)
   val encoders: ScalaType = ScalaType(Packages.internal, "Encoders")
 }

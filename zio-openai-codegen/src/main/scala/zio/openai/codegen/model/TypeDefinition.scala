@@ -228,7 +228,7 @@ object TypeDefinition {
                 DynamicObject(
                   directName,
                   parents.name,
-                  knownFields = Nil // TODO
+                  knownFields = getKnownFieldsFor(directName, parents)
                 )
               } else {
                 Object(
@@ -319,5 +319,24 @@ object TypeDefinition {
               throw new IllegalArgumentException(s"Unsupported schema type: $other")
           }
         }
+    }
+
+  // TODO: make this configurable
+  private def getKnownFieldsFor(name: String, parents: ParentChain): List[Field] =
+    if (name == "hyperparams" && parents.items == Chunk("FineTune")) {
+      List(
+        Field("batch_size", PrimitiveInteger, isRequired = false, isNullable = false, None),
+        Field(
+          "learning_rate_multiplier",
+          PrimitiveNumber,
+          isRequired = false,
+          isNullable = false,
+          None
+        ),
+        Field("n_epochs", PrimitiveInteger, isRequired = false, isNullable = false, None),
+        Field("prompt_loss_weight", PrimitiveNumber, isRequired = false, isNullable = false, None)
+      )
+    } else {
+      List.empty
     }
 }

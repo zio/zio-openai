@@ -7,7 +7,6 @@ import zio.openai.codegen.model.{ Field, Model, TypeDefinition }
 
 import scala.meta.*
 
-// TODO: check what to do with the types with not enough info in openAPI (generated as empty case classes)
 // TODO: better case names than CaseN
 // TODO: see if the enum unification trick can be used for objects and alternatives too
 // TODO: constrained types should be mapped to zio-prelude newtypes
@@ -159,7 +158,16 @@ trait ModelGenerator { this: HasParameters =>
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, List[Stat]] = {
     val typ = obj.scalaType(model)
 
-    val knownFields = getObjectFieldsAsParams(model, obj.knownFields) // TODO
+    val knownFieldParams = getObjectFieldsAsParams(model, obj.knownFields)
+    val knownFieldGetters =
+      obj.knownFields.map { field =>
+        val fieldType = field.typ.scalaType(model)
+        val fieldName = field.scalaNameTerm
+
+        q"""def ${fieldName}: Option[${fieldType.typ}] =
+             values.get(${Lit.String(field.name)}).flatMap(_.as[${fieldType.typ}].toOption)
+         """
+      }
 
     val schema =
       q"""
@@ -189,10 +197,20 @@ trait ModelGenerator { this: HasParameters =>
 
                 override protected def updateValues(updated: Map[String, Json]): ${typ.typ} =
                   copy(values = updated)
+
+                ..$knownFieldGetters
               }
             """,
           q"""
           object ${typ.termName} {
+            def apply(..$knownFieldParams): ${typ.typ} = {
+              import _root_.zio.json._
+              ${typ.termName}(List(..${obj.knownFields.map(field =>
+            q"${field.scalaNameTerm}.flatMap(value => value.toJsonAST.toOption.map(json => ${Lit
+              .String(field.name)} -> json))"
+          )}).flatten.toMap)
+            }
+
             $schema
             ..${children.flatten}
           }
