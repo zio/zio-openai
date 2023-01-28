@@ -2,6 +2,7 @@ package zio.openai.codegen.model
 
 import io.github.vigoo.metagen.core.ScalaType
 import io.swagger.v3.oas.models.media.Schema
+import zio.Chunk
 import zio.openai.codegen.generator.Naming.toPascalCase
 import zio.openai.codegen.generator.{ Packages, Types }
 
@@ -193,21 +194,18 @@ object TypeDefinition {
       model.types(referencedName).scalaType(model)
   }
 
-  def from(parentName: Option[String], directName: String, schema: Schema[?]): TypeDefinition =
+  def from(parents: ParentChain, directName: String, schema: Schema[?]): TypeDefinition =
     Option(schema.get$ref()) match {
       case Some(ref) => Ref(ref)
       case None      =>
         val oneOf = Option(schema.getOneOf).map(_.asScala).getOrElse(List.empty)
 
         if (oneOf.nonEmpty) {
-          val base = Alternatives(
+          Alternatives(
             directName,
-            parentName,
-            List.empty
-          )
-          base.copy(
+            parents.name,
             alternatives = oneOf.zipWithIndex.map { case (schema, idx) =>
-              TypeDefinition.from(Some(base.name), "case" + idx, schema)
+              TypeDefinition.from(parents / directName, "case" + idx, schema)
             }.toList
           )
         } else {
@@ -216,17 +214,14 @@ object TypeDefinition {
               val props = Option(schema.getProperties).map(_.asScala).getOrElse(Map.empty)
               val reqd = Option(schema.getRequired).map(_.asScala).getOrElse(List.empty)
 
-              val base = Object(
+              Object(
                 directName,
-                parentName,
+                parents.name,
                 Option(schema.getDescription),
-                List.empty
-              )
-              base.copy(
                 fields = props.map { case (fieldName, fieldSchema) =>
                   Field(
                     fieldName,
-                    TypeDefinition.from(Some(base.name), fieldName, fieldSchema),
+                    TypeDefinition.from(parents / directName, fieldName, fieldSchema),
                     reqd.contains(fieldName),
                     Option(fieldSchema.getNullable).exists(_.booleanValue()),
                     Option(fieldSchema.getDescription)
@@ -247,7 +242,7 @@ object TypeDefinition {
                   .map(_.asScala.toList.asInstanceOf[List[String]])
                   .getOrElse(Nil)
                 if (enum.nonEmpty) {
-                  Enum(directName, parentName, enum)
+                  Enum(directName, parents.name, enum)
                 } else {
                   val minLength = Option(schema.getMinLength).map(_.intValue())
                   val maxLength = Option(schema.getMaxLength).map(_.intValue())
@@ -289,12 +284,14 @@ object TypeDefinition {
             case "array" =>
               val minItems = Option(schema.getMinItems).map(_.intValue()).getOrElse(0)
               if (minItems == 0) {
-                Array(TypeDefinition.from(parentName, "item", schema.getItems))
+                Array(TypeDefinition.from(parents, directName + "_" + "item", schema.getItems))
               } else if (minItems == 1) {
-                NonEmptyArray(TypeDefinition.from(parentName, "item", schema.getItems))
+                NonEmptyArray(
+                  TypeDefinition.from(parents, directName + "_" + "item", schema.getItems)
+                )
               } else {
                 ConstrainedArray(
-                  TypeDefinition.from(parentName, "item", schema.getItems),
+                  TypeDefinition.from(parents, directName + "_" + "item", schema.getItems),
                   minItems,
                   Option(schema.getMaxItems).map(_.intValue()).getOrElse(Int.MaxValue)
                 )

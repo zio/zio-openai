@@ -62,7 +62,7 @@ object API {
               RequestBody(
                 contentType,
                 TypeDefinition.from(
-                  None,
+                  ParentChain.empty,
                   s"${group}_${op.getOperationId}",
                   contentSpec.getSchema
                 ) // TODO: grouping?
@@ -85,7 +85,7 @@ object API {
                   contentType,
                   TypeDefinition
                     .from(
-                      None,
+                      ParentChain.empty,
                       s"${group}_${op.getOperationId}_response", // TODO: grouping?
                       contentSpec.getSchema
                     )

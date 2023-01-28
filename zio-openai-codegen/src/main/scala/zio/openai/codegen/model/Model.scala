@@ -66,7 +66,7 @@ final case class Model(
 object Model {
   def from(openAPI: OpenAPI): Model = {
     val types = openAPI.getComponents.getSchemas.asScala.map { case (name, schema) =>
-      name -> TypeDefinition.from(None, name, schema)
+      name -> TypeDefinition.from(ParentChain.empty, name, schema)
     }.toMap
 
     val paths: Map[String, PathItem] = openAPI.getPaths.asScala.toMap

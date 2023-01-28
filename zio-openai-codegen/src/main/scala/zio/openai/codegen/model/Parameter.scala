@@ -47,7 +47,11 @@ object Parameter {
         PathParameter(
           name,
           Option(pathParam.getDescription),
-          TypeDefinition.from(None, "parent" + "_" + name, pathParam.getSchema), // TODO: grouping?
+          TypeDefinition.from(
+            ParentChain.empty,
+            parent + "_" + name,
+            pathParam.getSchema
+          ), // TODO: grouping?
           Option(pathParam.getRequired).exists(_.booleanValue())
         )
       case queryParam: parameters.QueryParameter =>
@@ -55,7 +59,11 @@ object Parameter {
         QueryParameter(
           name,
           Option(queryParam.getDescription),
-          TypeDefinition.from(None, parent + "_" + name, queryParam.getSchema), // TODO: grouping?
+          TypeDefinition.from(
+            ParentChain.empty,
+            parent + "_" + name,
+            queryParam.getSchema
+          ), // TODO: grouping?
           Option(queryParam.getRequired).exists(_.booleanValue())
         )
       case _                                     =>
