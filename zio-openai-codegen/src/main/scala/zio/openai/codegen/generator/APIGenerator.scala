@@ -7,9 +7,6 @@ import zio.openai.codegen.model.{ API, ContentType, Endpoint, Model, RequestBody
 
 import scala.meta.*
 
-// TODO: mark whole service as deprecated if all endpoints are deprecated (+option to not generate those)
-// TODO: precalculate Paths when possible and store them in private vals
-
 trait APIGenerator {
   this: HasParameters & ModelGenerator =>
   def generateServices(
@@ -38,6 +35,8 @@ trait APIGenerator {
     api: API
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] = {
     val svc = ScalaType(Packages.openai, api.name)
+
+    val isSvcDeprecated = api.endpoints.forall(_.isDeprecated)
 
     val interfaceMethods: List[Stat] =
       api.endpoints.flatMap { endpoint =>
@@ -94,7 +93,6 @@ trait APIGenerator {
     val implMethods =
       api.endpoints.map { endpoint =>
         val paramList = getParamList(model, endpoint)
-        val paramRefs = getParamRefs(endpoint)
         val responseType = endpoint.responseType(model)
 
         val queryParameters = endpoint.queryParameters
@@ -238,29 +236,47 @@ trait APIGenerator {
           }
        """
 
-    ZIO.succeed {
+    val ifaceBase =
       q"""
-        import zio.constraintless.TypeList.::
-
-        trait ${svc.typName} {
-          ..$interfaceMethods
-        }
-
-        object ${svc.termName} {
-          def live: ${Types.zlayer(Types.zhttpClient, ScalaType.nothing, svc).typ} =
-            ${Types.zlayer_.term} {
-              for {
-                client <- ${Types.zio_.term}.service[${Types.zhttpClient.typ}]
-                config <- ${Types.zio_.term}.config(${Types.openAIConfig.term}.config).orDie
-                boundary <- ${Types.random.term}.nextUUID.map(uuid => "--------" + uuid.toString.replace("-", ""))
-              } yield new Live(client, config.baseURL, config.apiKey, boundary)
-            }
-
-          ..$accessorMethods
-
-          $liveClass
-        }
+         trait ${svc.typName} {
+           ..$interfaceMethods
+         }
        """
+    val iface =
+      if (isSvcDeprecated) ifaceBase.copy(mods = Mod.Annot(init"deprecated()") :: ifaceBase.mods)
+      else ifaceBase
+
+    val liveBase =
+      q"""
+         def live: ${Types.zlayer(Types.zhttpClient, ScalaType.nothing, svc).typ} =
+          ${Types.zlayer_.term} {
+            for {
+              client <- ${Types.zio_.term}.service[${Types.zhttpClient.typ}]
+              config <- ${Types.zio_.term}.config(${Types.openAIConfig.term}.config).orDie
+              boundary <- ${Types.random.term}.nextUUID.map(uuid => "--------" + uuid.toString.replace("-", ""))
+            } yield new Live(client, config.baseURL, config.apiKey, boundary)
+          }
+       """
+    val live =
+      if (isSvcDeprecated) liveBase.copy(mods = Mod.Annot(init"deprecated()") :: liveBase.mods)
+      else liveBase
+
+    ZIO.succeed {
+      Term.Block(
+        List(
+          q"""import zio.constraintless.TypeList.::""",
+          iface,
+          q"""
+           object ${svc.termName} {
+             $live
+  
+             ..$accessorMethods
+  
+             $liveClass
+           }
+         """
+        )
+      )
     }
   }
 
