@@ -18,24 +18,24 @@ sealed trait TypeDefinition {
 
   def transformEnums(f: TypeDefinition.Enum => TypeDefinition.Enum): TypeDefinition =
     this match {
-      case TypeDefinition.Object(directName, parentName, description, fields) =>
+      case TypeDefinition.Object(directName, parentName, description, fields)             =>
         TypeDefinition.Object(directName, parentName, description, fields.map(_.transformEnums(f)))
-      case TypeDefinition.PrimitiveBoolean                                    => this
-      case TypeDefinition.PrimitiveString                                     => this
-      case TypeDefinition.ConstrainedString(minLength, maxLength)             => this
-      case TypeDefinition.Binary                                              => this
-      case TypeDefinition.PrimitiveInteger                                    => this
-      case TypeDefinition.ConstrainedInteger(min, max)                        => this
-      case TypeDefinition.PrimitiveNumber                                     => this
-      case TypeDefinition.ConstrainedNumber(min, max)                         => this
-      case TypeDefinition.Array(itemType)                                     => this
-      case TypeDefinition.NonEmptyArray(itemType)                             => this
-      case TypeDefinition.ConstrainedArray(itemType, min, max)                => this
-      case TypeDefinition.Alternatives(directName, parentName, alternatives)  =>
+      case TypeDefinition.PrimitiveBoolean                                                => this
+      case TypeDefinition.PrimitiveString                                                 => this
+      case TypeDefinition.ConstrainedString(directName, parentName, minLength, maxLength) => this
+      case TypeDefinition.Binary                                                          => this
+      case TypeDefinition.PrimitiveInteger                                                => this
+      case TypeDefinition.ConstrainedInteger(directName, parentName, min, max)            => this
+      case TypeDefinition.PrimitiveNumber                                                 => this
+      case TypeDefinition.ConstrainedNumber(directName, parentName, min, max)             => this
+      case TypeDefinition.Array(itemType)                                                 => this
+      case TypeDefinition.NonEmptyArray(itemType)                                         => this
+      case TypeDefinition.ConstrainedArray(itemType, min, max)                            => this
+      case TypeDefinition.Alternatives(directName, parentName, alternatives)              =>
         TypeDefinition.Alternatives(directName, parentName, alternatives.map(_.transformEnums(f)))
-      case e @ TypeDefinition.Enum(name, directName, values)                  => f(e)
-      case TypeDefinition.Ref(name)                                           => this
-      case TypeDefinition.DynamicObject(directName, parentName, knownFields)  =>
+      case e @ TypeDefinition.Enum(name, directName, values)                              => f(e)
+      case TypeDefinition.Ref(name)                                                       => this
+      case TypeDefinition.DynamicObject(directName, parentName, knownFields)              =>
         TypeDefinition.DynamicObject(directName, parentName, knownFields.map(_.transformEnums(f)))
     }
 }
@@ -70,6 +70,8 @@ object TypeDefinition {
       }.toList
   }
 
+  sealed trait SmartNewType extends TypeDefinition with NonPrimitive
+
   final case class Object(
     directName: String,
     parentName: Option[String],
@@ -93,12 +95,13 @@ object TypeDefinition {
       ScalaType.string
   }
 
-  final case class ConstrainedString(minLength: Int, maxLength: Int) extends TypeDefinition {
-    override val name: String = "string"
+  final case class ConstrainedString(
+    directName: String,
+    parentName: Option[String],
+    minLength: Int,
+    maxLength: Int
+  ) extends TypeDefinition with NonPrimitive with SmartNewType {
     override val description: Option[String] = None
-
-    override def scalaType(model: Model): ScalaType =
-      ScalaType.string // TODO
   }
 
   final case object Binary extends TypeDefinition {
@@ -117,12 +120,13 @@ object TypeDefinition {
       ScalaType.int
   }
 
-  final case class ConstrainedInteger(min: Int, max: Int) extends TypeDefinition {
-    override val name: String = "integer"
+  final case class ConstrainedInteger(
+    val directName: String,
+    parentName: Option[String],
+    min: Int,
+    max: Int
+  ) extends TypeDefinition with NonPrimitive with SmartNewType {
     override val description: Option[String] = None
-
-    override def scalaType(model: Model): ScalaType =
-      ScalaType.int // TODO
   }
 
   final case object PrimitiveNumber extends TypeDefinition {
@@ -133,12 +137,13 @@ object TypeDefinition {
       ScalaType.double
   }
 
-  final case class ConstrainedNumber(min: Double, max: Double) extends TypeDefinition {
-    override val name: String = "number"
+  final case class ConstrainedNumber(
+    directName: String,
+    parentName: Option[String],
+    min: Double,
+    max: Double
+  ) extends TypeDefinition with NonPrimitive with SmartNewType {
     override val description: Option[String] = None
-
-    override def scalaType(model: Model): ScalaType =
-      ScalaType.double // TODO
   }
 
   final case class Array(itemType: TypeDefinition) extends TypeDefinition {
@@ -289,6 +294,8 @@ object TypeDefinition {
 
                   if (minLength.isDefined || maxLength.isDefined)
                     ConstrainedString(
+                      directName,
+                      parents.name,
                       minLength.getOrElse(0),
                       maxLength.getOrElse(Int.MaxValue)
                     )
@@ -303,6 +310,8 @@ object TypeDefinition {
 
               if (min.isDefined || max.isDefined)
                 ConstrainedInteger(
+                  directName,
+                  parents.name,
                   min.getOrElse(Int.MinValue),
                   max.getOrElse(Int.MaxValue)
                 )
@@ -315,6 +324,8 @@ object TypeDefinition {
 
               if (min.isDefined || max.isDefined)
                 ConstrainedNumber(
+                  directName,
+                  parents.name,
                   min.getOrElse(Double.MinValue),
                   max.getOrElse(Double.MaxValue)
                 )

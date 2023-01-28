@@ -32,6 +32,11 @@ final case class Model(
       a
     }.toList
 
+  lazy val smartNewTypes: List[TypeDefinition.SmartNewType] =
+    finalTypes.collect { case (_, a: TypeDefinition.SmartNewType) =>
+      a
+    }.toList
+
   lazy val (enums, enumMapping) =
     unifyEnums(
       allTypes.collect { case (_, e: TypeDefinition.Enum) =>

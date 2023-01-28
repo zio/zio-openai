@@ -50,6 +50,8 @@ object Types {
   val typeListCons = ScalaType(Packages.zioConstraintless / "TypeList", "::")
   val typeListEnd = ScalaType(Packages.zioConstraintless / "TypeList", "End")
 
+  def subtypeOf(sup: ScalaType): ScalaType = ScalaType(Packages.zioPrelude, "Subtype", sup)
+
   val openAIConfig: ScalaType = ScalaType(Packages.openai, "OpenAIConfig")
   val decoders: ScalaType = ScalaType(Packages.internal, "Decoders")
   def dynamicObjectOf(self: ScalaType): ScalaType =

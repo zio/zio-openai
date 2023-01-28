@@ -10,6 +10,7 @@ object Packages {
   val zioHttpModel: Package = zioHttp / "model"
   val zioJson: Package = zio / "json"
   val zioJsonAst: Package = zioJson / "ast"
+  val zioPrelude: Package = zio / "prelude"
   val zioSchema: Package = zio / "schema"
   val zioSchemaCodec: Package = zioSchema / "codec"
 

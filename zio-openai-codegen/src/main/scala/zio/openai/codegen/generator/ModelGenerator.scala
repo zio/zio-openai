@@ -8,7 +8,6 @@ import zio.openai.codegen.model.{ Field, Model, TypeDefinition }
 import scala.meta.*
 
 // TODO: see if the enum unification trick can be used for objects and alternatives too
-// TODO: constrained types should be mapped to zio-prelude newtypes
 // TODO: add scaladoc support to metagen and use the description field
 // TODO: verify that non-required vs required-nullable works properly
 
@@ -18,32 +17,38 @@ trait ModelGenerator { this: HasParameters =>
   ): ZIO[Any, GeneratorFailure[OpenAIGeneratorFailure], Set[Path]] = {
     val generate =
       for {
-        _       <- Generator.setRoot(parameters.targetRoot)
-        _       <- Generator.setScalaVersion(parameters.scalaVersion)
-        objs    <- ZIO.foreach(model.objects.filter(_.isTopLevel)) { obj =>
-                     Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
-                       Packages.models,
-                       obj.scalaName
-                     )(generateTopLevelObjectClass(model, obj))
-                   }
-        dynObjs <- ZIO.foreach(model.dynamicObjects.filter(_.isTopLevel)) { dynObj =>
-                     Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
-                       Packages.models,
-                       dynObj.scalaName
-                     )(generateTopLevelDynamicObjectClass(model, dynObj))
-                   }
-        alts    <- ZIO.foreach(model.alternatives.filter(_.isTopLevel)) { alt =>
-                     Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
-                       Packages.models,
-                       alt.scalaName
-                     )(generateTopLevelAlternativesTrait(model, alt))
-                   }
-        enums   <- ZIO.foreach(model.enums.filter(_.isTopLevel)) { enum =>
-                     Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
-                       Packages.models,
-                       enum.scalaName
-                     )(generateTopLevelEnumTrait(model, enum))
-                   }
+        _        <- Generator.setRoot(parameters.targetRoot)
+        _        <- Generator.setScalaVersion(parameters.scalaVersion)
+        objs     <- ZIO.foreach(model.objects.filter(_.isTopLevel)) { obj =>
+                      Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
+                        Packages.models,
+                        obj.scalaName
+                      )(generateTopLevelObjectClass(model, obj))
+                    }
+        dynObjs  <- ZIO.foreach(model.dynamicObjects.filter(_.isTopLevel)) { dynObj =>
+                      Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
+                        Packages.models,
+                        dynObj.scalaName
+                      )(generateTopLevelDynamicObjectClass(model, dynObj))
+                    }
+        alts     <- ZIO.foreach(model.alternatives.filter(_.isTopLevel)) { alt =>
+                      Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
+                        Packages.models,
+                        alt.scalaName
+                      )(generateTopLevelAlternativesTrait(model, alt))
+                    }
+        enums    <- ZIO.foreach(model.enums.filter(_.isTopLevel)) { enum =>
+                      Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
+                        Packages.models,
+                        enum.scalaName
+                      )(generateTopLevelEnumTrait(model, enum))
+                    }
+        newtypes <- ZIO.foreach(model.smartNewTypes.filter(_.isTopLevel)) { typ =>
+                      Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
+                        Packages.models,
+                        typ.scalaName
+                      )(generateTopLevelSmartNewType(model, typ))
+                    }
       } yield objs.toSet ++ dynObjs.toSet ++ alts.toSet ++ enums.toSet
 
     generate.provide(
@@ -122,6 +127,8 @@ trait ModelGenerator { this: HasParameters =>
           generateEnumTrait(model, child)
         case child: TypeDefinition.DynamicObject =>
           generateDynamicObjectClass(model, child)
+        case child: TypeDefinition.SmartNewType  =>
+          generateSmartNewType(model, child)
         case _                                   =>
           ZIO.fail(OpenAIGeneratorFailure.UnsupportedChildType)
       }
@@ -353,6 +360,80 @@ trait ModelGenerator { this: HasParameters =>
            ..$cases
           }
          """
+      )
+    }
+  }
+
+  def generateTopLevelSmartNewType(
+    model: Model,
+    smartNewType: TypeDefinition.SmartNewType
+  ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] =
+    generateSmartNewType(model, smartNewType).map { cls =>
+      q"""
+       import zio.openai.model.nonEmptyChunkSchema
+  
+       ..$cls
+       """
+    }
+
+  private def generateSmartNewType(
+    model: Model,
+    smartNewType: TypeDefinition.SmartNewType
+  ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, List[Stat]] = {
+
+    val typ = smartNewType.scalaType(model)
+    val sup =
+      smartNewType match {
+        case _: TypeDefinition.ConstrainedInteger =>
+          ScalaType.int
+        case _: TypeDefinition.ConstrainedNumber  =>
+          ScalaType.double
+        case _: TypeDefinition.ConstrainedString  =>
+          ScalaType.string
+      }
+
+    val assertion =
+      smartNewType match {
+        case TypeDefinition.ConstrainedInteger(directName, parentName, min, max) =>
+          q"""greaterThanOrEqualTo(${Lit.Int(min)}) && lessThanOrEqualTo(${Lit.Int(max)})"""
+        case TypeDefinition.ConstrainedNumber(directName, parentName, min, max)  =>
+          q"""greaterThanOrEqualTo(${Lit.Double(min)}) && lessThanOrEqualTo(${Lit.Double(max)})"""
+        case TypeDefinition.ConstrainedString(directName, parentName, min, max)  =>
+          q"""hasLength(greaterThanOrEqualTo(${Lit.Int(min)}) && lessThanOrEqualTo(${Lit.Int(
+            max
+          )}))"""
+      }
+
+    val mods: List[Mod] =
+      if (parameters.scalaVersion.startsWith("3"))
+        List(Mod.Override(), Mod.Inline())
+      else
+        List(Mod.Override())
+
+    val wrappedAssertion =
+      if (parameters.scalaVersion.startsWith("3"))
+        assertion
+      else
+        q"""assert { $assertion }"""
+
+    ZIO.succeed {
+      List(
+        q"""object ${typ.termName} extends ${Types.subtypeOf(sup).init} {
+            import zio.prelude.Assertion._
+            ..$mods def assertion = $wrappedAssertion
+
+            implicit val schema: ${Types.schemaOf(typ).typ} =
+              ${Types.schema_.term}[${sup.typ}].transform(wrap(_), unwrap)
+
+          }
+       """,
+        Defn.Type(
+          Nil,
+          typ.typName,
+          Type.ParamClause(Nil),
+          Type.Select(typ.term, Type.Name("Type")),
+          Type.Bounds(None, None)
+        )
       )
     }
   }
