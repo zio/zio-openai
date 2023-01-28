@@ -12,6 +12,8 @@ sealed trait TypeDefinition {
   val name: String
   val description: Option[String]
 
+  def verboseName: String = name.capitalize
+
   def scalaType(model: Model): ScalaType
 
   def transformEnums(f: TypeDefinition.Enum => TypeDefinition.Enum): TypeDefinition =
@@ -143,6 +145,8 @@ object TypeDefinition {
     override val name: String = "array"
     override val description: Option[String] = None
 
+    override val verboseName: String = s"ArrayOf${itemType.verboseName}"
+
     override def scalaType(model: Model): ScalaType =
       Types.chunkOf(itemType.scalaType(model))
   }
@@ -150,6 +154,8 @@ object TypeDefinition {
   final case class NonEmptyArray(itemType: TypeDefinition) extends TypeDefinition {
     override val name: String = "array"
     override val description: Option[String] = None
+
+    override val verboseName: String = s"ArrayOf${itemType.verboseName}"
 
     override def scalaType(model: Model): ScalaType =
       Types.nonEmptyChunkOf(itemType.scalaType(model))
@@ -159,6 +165,8 @@ object TypeDefinition {
       extends TypeDefinition {
     override val name: String = "array"
     override val description: Option[String] = None
+
+    override val verboseName: String = s"ArrayOf${itemType.verboseName}"
 
     override def scalaType(model: Model): ScalaType =
       Types.chunkOf(itemType.scalaType(model)) // TODO
@@ -171,10 +179,24 @@ object TypeDefinition {
   ) extends TypeDefinition with NonPrimitive {
     override val description: Option[String] = None
 
+    lazy val caseNames: List[String] = {
+      lazy val default = alternatives.indices.map(idx => s"Case$idx").toList
+      val typeNameBased = alternatives.map { typ =>
+        typ.verboseName
+      }.distinct
+
+      if (typeNameBased.size == alternatives.size) {
+        typeNameBased
+      } else {
+        default
+      }
+    }
+
     def constructors(model: Model): List[(ScalaType, TypeDefinition)] = {
       val typ = scalaType(model)
-      alternatives.zipWithIndex.map { case (alt, idx) =>
-        typ / s"Case$idx" -> alt
+
+      alternatives.zip(caseNames).map { case (alt, caseName) =>
+        typ / caseName -> alt
       }
     }
   }

@@ -7,7 +7,6 @@ import zio.openai.codegen.model.{ Field, Model, TypeDefinition }
 
 import scala.meta.*
 
-// TODO: better case names than CaseN
 // TODO: see if the enum unification trick can be used for objects and alternatives too
 // TODO: constrained types should be mapped to zio-prelude newtypes
 // TODO: add scaladoc support to metagen and use the description field
