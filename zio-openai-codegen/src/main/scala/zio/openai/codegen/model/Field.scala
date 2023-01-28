@@ -8,7 +8,8 @@ final case class Field(
   name: String,
   typ: TypeDefinition,
   isRequired: Boolean,
-  isNullable: Boolean
+  isNullable: Boolean,
+  description: Option[String]
 ) {
   val scalaName: String = toCamelCase(name)
   val scalaNameTerm: Term.Name = Term.Name(scalaName)

@@ -61,7 +61,11 @@ object API {
               val contentType = ContentType.from(contentTypeName)
               RequestBody(
                 contentType,
-                TypeDefinition.from(s"${group}_${op.getOperationId}", "body", contentSpec.getSchema)
+                TypeDefinition.from(
+                  None,
+                  s"${group}_${op.getOperationId}",
+                  contentSpec.getSchema
+                ) // TODO: grouping?
               )
             }
 
@@ -81,8 +85,8 @@ object API {
                   contentType,
                   TypeDefinition
                     .from(
-                      s"${group}_${op.getOperationId}_response",
-                      "response",
+                      None,
+                      s"${group}_${op.getOperationId}_response", // TODO: grouping?
                       contentSpec.getSchema
                     )
                 )

@@ -4,4 +4,5 @@ sealed trait OpenAIGeneratorFailure
 
 object OpenAIGeneratorFailure {
   final case class FailedToLoadOpenAPI(reason: Throwable) extends OpenAIGeneratorFailure
+  case object UnsupportedChildType extends OpenAIGeneratorFailure
 }

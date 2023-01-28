@@ -15,35 +15,62 @@ sealed trait TypeDefinition {
 
   def transformEnums(f: TypeDefinition.Enum => TypeDefinition.Enum): TypeDefinition =
     this match {
-      case TypeDefinition.Object(name, description, fields)       =>
-        TypeDefinition.Object(name, description, fields.map(_.transformEnums(f)))
-      case TypeDefinition.PrimitiveBoolean                        => this
-      case TypeDefinition.PrimitiveString                         => this
-      case TypeDefinition.ConstrainedString(minLength, maxLength) => this
-      case TypeDefinition.Binary                                  => this
-      case TypeDefinition.PrimitiveInteger                        => this
-      case TypeDefinition.ConstrainedInteger(min, max)            => this
-      case TypeDefinition.PrimitiveNumber                         => this
-      case TypeDefinition.ConstrainedNumber(min, max)             => this
-      case TypeDefinition.Array(itemType)                         => this
-      case TypeDefinition.NonEmptyArray(itemType)                 => this
-      case TypeDefinition.ConstrainedArray(itemType, min, max)    => this
-      case TypeDefinition.Alternatives(name, alternatives)        =>
-        TypeDefinition.Alternatives(name, alternatives.map(_.transformEnums(f)))
-      case e @ TypeDefinition.Enum(name, directName, values)      => f(e)
-      case TypeDefinition.Ref(name)                               => this
+      case TypeDefinition.Object(directName, parentName, description, fields) =>
+        TypeDefinition.Object(directName, parentName, description, fields.map(_.transformEnums(f)))
+      case TypeDefinition.PrimitiveBoolean                                    => this
+      case TypeDefinition.PrimitiveString                                     => this
+      case TypeDefinition.ConstrainedString(minLength, maxLength)             => this
+      case TypeDefinition.Binary                                              => this
+      case TypeDefinition.PrimitiveInteger                                    => this
+      case TypeDefinition.ConstrainedInteger(min, max)                        => this
+      case TypeDefinition.PrimitiveNumber                                     => this
+      case TypeDefinition.ConstrainedNumber(min, max)                         => this
+      case TypeDefinition.Array(itemType)                                     => this
+      case TypeDefinition.NonEmptyArray(itemType)                             => this
+      case TypeDefinition.ConstrainedArray(itemType, min, max)                => this
+      case TypeDefinition.Alternatives(directName, parentName, alternatives)  =>
+        TypeDefinition.Alternatives(directName, parentName, alternatives.map(_.transformEnums(f)))
+      case e @ TypeDefinition.Enum(name, directName, values)                  => f(e)
+      case TypeDefinition.Ref(name)                                           => this
     }
 }
 
 object TypeDefinition {
-  final case class Object(name: String, description: Option[String], fields: List[Field])
-      extends TypeDefinition {
+  trait NonPrimitive { self: TypeDefinition =>
+    val directName: String
+    val parentName: Option[String]
+    override val name: String = parentName match {
+      case Some(value) => value + "_" + directName
+      case None        => directName
+    }
 
-    val scalaName: String = toPascalCase(name)
+    val scalaName: String = toPascalCase(directName)
 
     override def scalaType(model: Model): ScalaType =
-      ScalaType(Packages.models, scalaName)
+      parentName match {
+        case Some(parentName) =>
+          model.finalTypes.get(parentName) match {
+            case Some(parentType) =>
+              parentType.scalaType(model) / scalaName
+            case None             => ScalaType(Packages.models, scalaName)
+          }
+        case None             => ScalaType(Packages.models, scalaName)
+      }
+
+    def isTopLevel: Boolean = parentName.isEmpty
+
+    def children(model: Model): List[TypeDefinition] =
+      model.finalTypes.collect {
+        case (_, child: NonPrimitive) if child.parentName.contains(name) => child
+      }.toList
   }
+
+  final case class Object(
+    directName: String,
+    parentName: Option[String],
+    description: Option[String],
+    fields: List[Field]
+  ) extends TypeDefinition with NonPrimitive
 
   final case object PrimitiveBoolean extends TypeDefinition {
     override val name: String = "boolean"
@@ -134,14 +161,12 @@ object TypeDefinition {
       Types.chunkOf(itemType.scalaType(model)) // TODO
   }
 
-  final case class Alternatives(name: String, alternatives: List[TypeDefinition])
-      extends TypeDefinition {
+  final case class Alternatives(
+    directName: String,
+    parentName: Option[String],
+    alternatives: List[TypeDefinition]
+  ) extends TypeDefinition with NonPrimitive {
     override val description: Option[String] = None
-
-    val scalaName: String = toPascalCase(name)
-
-    override def scalaType(model: Model): ScalaType =
-      ScalaType(Packages.models, scalaName)
 
     def constructors(model: Model): List[(ScalaType, TypeDefinition)] = {
       val typ = scalaType(model)
@@ -151,36 +176,38 @@ object TypeDefinition {
     }
   }
 
-  final case class Enum(name: String, directName: String, values: List[String])
-      extends TypeDefinition {
+  final case class Enum(
+    directName: String,
+    parentName: Option[String],
+    values: List[String]
+  ) extends TypeDefinition with NonPrimitive {
     override val description: Option[String] = None
-
-    val scalaName: String = toPascalCase(name)
-
-    override def scalaType(model: Model): ScalaType =
-      ScalaType(Packages.models, scalaName)
   }
 
   final case class Ref(name: String) extends TypeDefinition {
     override val description: Option[String] = None
 
-    val referencedName = name.stripPrefix("#/components/schemas/")
+    val referencedName: String = name.stripPrefix("#/components/schemas/")
 
     override def scalaType(model: Model): ScalaType =
       model.types(referencedName).scalaType(model)
   }
 
-  def from(name: String, directName: String, schema: Schema[?]): TypeDefinition =
+  def from(parentName: Option[String], directName: String, schema: Schema[?]): TypeDefinition =
     Option(schema.get$ref()) match {
       case Some(ref) => Ref(ref)
       case None      =>
         val oneOf = Option(schema.getOneOf).map(_.asScala).getOrElse(List.empty)
 
         if (oneOf.nonEmpty) {
-          Alternatives(
-            name,
-            oneOf.zipWithIndex.map { case (schema, idx) =>
-              TypeDefinition.from(name + "_case" + idx, "case" + idx, schema)
+          val base = Alternatives(
+            directName,
+            parentName,
+            List.empty
+          )
+          base.copy(
+            alternatives = oneOf.zipWithIndex.map { case (schema, idx) =>
+              TypeDefinition.from(Some(base.name), "case" + idx, schema)
             }.toList
           )
         } else {
@@ -189,15 +216,20 @@ object TypeDefinition {
               val props = Option(schema.getProperties).map(_.asScala).getOrElse(Map.empty)
               val reqd = Option(schema.getRequired).map(_.asScala).getOrElse(List.empty)
 
-              Object(
-                name,
+              val base = Object(
+                directName,
+                parentName,
                 Option(schema.getDescription),
-                props.map { case (fieldName, fieldSchema) =>
+                List.empty
+              )
+              base.copy(
+                fields = props.map { case (fieldName, fieldSchema) =>
                   Field(
                     fieldName,
-                    TypeDefinition.from(name + "_" + fieldName, fieldName, fieldSchema),
+                    TypeDefinition.from(Some(base.name), fieldName, fieldSchema),
                     reqd.contains(fieldName),
-                    Option(fieldSchema.getNullable).exists(_.booleanValue())
+                    Option(fieldSchema.getNullable).exists(_.booleanValue()),
+                    Option(fieldSchema.getDescription)
                   )
                 }.toList
               )
@@ -215,7 +247,7 @@ object TypeDefinition {
                   .map(_.asScala.toList.asInstanceOf[List[String]])
                   .getOrElse(Nil)
                 if (enum.nonEmpty) {
-                  Enum(name, directName, enum)
+                  Enum(directName, parentName, enum)
                 } else {
                   val minLength = Option(schema.getMinLength).map(_.intValue())
                   val maxLength = Option(schema.getMaxLength).map(_.intValue())
@@ -257,12 +289,12 @@ object TypeDefinition {
             case "array" =>
               val minItems = Option(schema.getMinItems).map(_.intValue()).getOrElse(0)
               if (minItems == 0) {
-                Array(TypeDefinition.from(name + "_" + "item", "item", schema.getItems))
+                Array(TypeDefinition.from(parentName, "item", schema.getItems))
               } else if (minItems == 1) {
-                NonEmptyArray(TypeDefinition.from(name + "_" + "item", "item", schema.getItems))
+                NonEmptyArray(TypeDefinition.from(parentName, "item", schema.getItems))
               } else {
                 ConstrainedArray(
-                  TypeDefinition.from(name + "_" + "item", "item", schema.getItems),
+                  TypeDefinition.from(parentName, "item", schema.getItems),
                   minItems,
                   Option(schema.getMaxItems).map(_.intValue()).getOrElse(Int.MaxValue)
                 )

@@ -7,11 +7,10 @@ import zio.openai.codegen.model.{ Model, TypeDefinition }
 
 import scala.meta.*
 
-// TODO: generate alternatives to their parent's companion objects with shorter name
+// TODO: see if the enum unification trick can be used for objects and alternatives too
 // TODO: constrained types should be mapped to zio-prelude newtypes
 // TODO: add scaladoc support to metagen and use the description field
 // TODO: better case names than CaseN
-// TODO: field descriptions
 // TODO: check what to do with the types with not enough info in openAPI (generated as empty case classes)
 
 trait ModelGenerator { this: HasParameters =>
@@ -22,23 +21,23 @@ trait ModelGenerator { this: HasParameters =>
       for {
         _     <- Generator.setRoot(parameters.targetRoot)
         _     <- Generator.setScalaVersion(parameters.scalaVersion)
-        objs  <- ZIO.foreach(model.objects) { obj =>
+        objs  <- ZIO.foreach(model.objects.filter(_.isTopLevel)) { obj =>
                    Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
                      Packages.models,
                      obj.scalaName
-                   )(generateObjectClass(model, obj))
+                   )(generateTopLevelObjectClass(model, obj))
                  }
-        alts  <- ZIO.foreach(model.alternatives) { alt =>
+        alts  <- ZIO.foreach(model.alternatives.filter(_.isTopLevel)) { alt =>
                    Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
                      Packages.models,
                      alt.scalaName
-                   )(generateAlternativesTrait(model, alt))
+                   )(generateTopLevelAlternativesTrait(model, alt))
                  }
-        enums <- ZIO.foreach(model.enums) { enum =>
+        enums <- ZIO.foreach(model.enums.filter(_.isTopLevel)) { enum =>
                    Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
                      Packages.models,
                      enum.scalaName
-                   )(generateEnumTrait(model, enum))
+                   )(generateTopLevelEnumTrait(model, enum))
                  }
       } yield objs.toSet ++ alts.toSet ++ enums.toSet
 
@@ -58,10 +57,22 @@ trait ModelGenerator { this: HasParameters =>
         param"$fieldName: ${fieldType.typ}"
     }
 
+  private def generateTopLevelObjectClass(
+    model: Model,
+    obj: TypeDefinition.Object
+  ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] =
+    generateObjectClass(model, obj).map { cls =>
+      q"""
+     import zio.openai.model.nonEmptyChunkSchema
+
+     ..$cls
+     """
+    }
+
   private def generateObjectClass(
     model: Model,
     obj: TypeDefinition.Object
-  ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] = {
+  ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, List[Stat]] = {
 
     val typ = obj.scalaType(model)
 
@@ -96,23 +107,47 @@ trait ModelGenerator { this: HasParameters =>
          (..$fields) => ${typ.termName}(..${obj.fields.map(field => field.scalaNameTerm)})
        )"""
 
-    ZIO.succeed {
+    ZIO
+      .foreach(obj.children(model)) {
+        case child: TypeDefinition.Object       =>
+          generateObjectClass(model, child)
+        case child: TypeDefinition.Alternatives =>
+          generateAlternativesTrait(model, child)
+        case child: TypeDefinition.Enum         =>
+          generateEnumTrait(model, child)
+        case _                                  =>
+          ZIO.fail(OpenAIGeneratorFailure.UnsupportedChildType)
+      }
+      .map { children =>
+        List[Stat](
+          q"""final case class ${typ.typName}(..$fields)""",
+          q"""
+              object ${typ.termName} {
+                implicit val schema: ${Types.schemaOf(typ).typ} = $schema
+
+                ..${children.flatten}
+              }
+          """
+        )
+      }
+  }
+
+  private def generateTopLevelAlternativesTrait(
+    model: Model,
+    alt: TypeDefinition.Alternatives
+  ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] =
+    generateAlternativesTrait(model, alt).map { cls =>
       q"""
-        import zio.openai.model.nonEmptyChunkSchema
+     import zio.openai.model.nonEmptyChunkSchema
 
-        final case class ${typ.typName}(..$fields)
-
-        object ${typ.termName} {
-          implicit val schema: ${Types.schemaOf(typ).typ} = $schema
-        }
+     ..$cls
      """
     }
-  }
 
   private def generateAlternativesTrait(
     model: Model,
     alt: TypeDefinition.Alternatives
-  ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] = {
+  ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, List[Stat]] = {
 
     val typ = alt.scalaType(model)
 
@@ -157,29 +192,40 @@ trait ModelGenerator { this: HasParameters =>
       }
 
     ZIO.succeed {
-      q"""
-        import zio.openai.model.nonEmptyChunkSchema
+      List[Stat](
+        q"""sealed trait ${typ.typName}""",
+        q"""
+            object ${typ.termName} {
 
-        sealed trait ${typ.typName}
+            implicit lazy val schema: ${Types.schemaOf(typ).typ} =
+              ${Types.schemaEnumN.term}(
+                ${Types.typeId.term}.parse(${Lit.String(typ.asString)}),
+                $caseSetChain
+              )
 
-        object ${typ.termName} {
-
-          implicit lazy val schema: ${Types.schemaOf(typ).typ} =
-            ${Types.schemaEnumN.term}(
-              ${Types.typeId.term}.parse(${Lit.String(typ.asString)}),
-              $caseSetChain
-            )
-
-         ..$cases
-        }
-       """
+           ..$cases
+          }
+         """
+      )
     }
   }
+
+  private def generateTopLevelEnumTrait(
+    model: Model,
+    enum: TypeDefinition.Enum
+  ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] =
+    generateEnumTrait(model, enum).map { cls =>
+      q"""
+     import zio.openai.model.nonEmptyChunkSchema
+
+     ..$cls
+     """
+    }
 
   private def generateEnumTrait(
     model: Model,
     enum: TypeDefinition.Enum
-  ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] = {
+  ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, List[Stat]] = {
 
     val typ = enum.scalaType(model)
 
@@ -207,20 +253,21 @@ trait ModelGenerator { this: HasParameters =>
     val toString = q"(s: ${typ.typ}) => s match { ..case $toStringMatches }"
 
     ZIO.succeed {
-      q"""
-        sealed trait ${typ.typName}
-  
-        object ${typ.termName} {
+      List[Stat](
+        q"""sealed trait ${typ.typName}""",
+        q"""
+          object ${typ.termName} {
 
-          implicit lazy val schema: ${Types.schemaOf(typ).typ} =
-            ${Types.schema_.term}[${ScalaType.string.typ}].transformOrFail(
-                $fromString,
-                $toString
-            )
+            implicit lazy val schema: ${Types.schemaOf(typ).typ} =
+              ${Types.schema_.term}[${ScalaType.string.typ}].transformOrFail(
+                  $fromString,
+                  $toString
+              )
 
-         ..$cases
-        }
-       """
+           ..$cases
+          }
+         """
+      )
     }
   }
 }
