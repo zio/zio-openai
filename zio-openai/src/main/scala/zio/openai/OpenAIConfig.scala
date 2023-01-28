@@ -1,6 +1,6 @@
 package zio.openai
 
-import zio.{Chunk, Config}
+import zio.{ Chunk, Config }
 import zio.Config.Secret
 import zio.http.URL
 

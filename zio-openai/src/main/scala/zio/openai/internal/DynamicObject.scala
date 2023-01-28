@@ -11,13 +11,11 @@ abstract class DynamicObject[Self] extends Dynamic {
 
   def selectDynamic(name: String): Json = values(name)
 
-  def applyDynamicNamed(name: String)(args: (String, Json)*): Self = {
+  def applyDynamicNamed(name: String)(args: (String, Json)*): Self =
     if (name == "update") {
       val updated = args.toMap
       updateValues(values ++ updated)
     } else {
       throw new IllegalArgumentException(s"Unknown method $name")
     }
-  }
 }
-

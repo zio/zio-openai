@@ -2,8 +2,8 @@ package zio.openai
 
 import zio.json.ast.Json
 import zio.prelude._
-import zio.schema.{DynamicValue, Schema, StandardType, TypeId}
-import zio.{Chunk, NonEmptyChunk}
+import zio.schema.{ DynamicValue, Schema, StandardType, TypeId }
+import zio.{ Chunk, NonEmptyChunk }
 
 import java.util.Base64
 import scala.collection.immutable.ListMap
