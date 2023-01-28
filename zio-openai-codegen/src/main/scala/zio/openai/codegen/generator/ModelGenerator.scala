@@ -3,15 +3,16 @@ package zio.openai.codegen.generator
 import io.github.vigoo.metagen.core.*
 import zio.ZIO
 import zio.nio.file.Path
-import zio.openai.codegen.model.{ Model, TypeDefinition }
+import zio.openai.codegen.model.{ Field, Model, TypeDefinition }
 
 import scala.meta.*
 
+// TODO: check what to do with the types with not enough info in openAPI (generated as empty case classes)
+// TODO: better case names than CaseN
 // TODO: see if the enum unification trick can be used for objects and alternatives too
 // TODO: constrained types should be mapped to zio-prelude newtypes
 // TODO: add scaladoc support to metagen and use the description field
-// TODO: better case names than CaseN
-// TODO: check what to do with the types with not enough info in openAPI (generated as empty case classes)
+// TODO: verify that non-required vs required-nullable works properly
 
 trait ModelGenerator { this: HasParameters =>
   def generateModels(
@@ -19,35 +20,41 @@ trait ModelGenerator { this: HasParameters =>
   ): ZIO[Any, GeneratorFailure[OpenAIGeneratorFailure], Set[Path]] = {
     val generate =
       for {
-        _     <- Generator.setRoot(parameters.targetRoot)
-        _     <- Generator.setScalaVersion(parameters.scalaVersion)
-        objs  <- ZIO.foreach(model.objects.filter(_.isTopLevel)) { obj =>
-                   Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
-                     Packages.models,
-                     obj.scalaName
-                   )(generateTopLevelObjectClass(model, obj))
-                 }
-        alts  <- ZIO.foreach(model.alternatives.filter(_.isTopLevel)) { alt =>
-                   Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
-                     Packages.models,
-                     alt.scalaName
-                   )(generateTopLevelAlternativesTrait(model, alt))
-                 }
-        enums <- ZIO.foreach(model.enums.filter(_.isTopLevel)) { enum =>
-                   Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
-                     Packages.models,
-                     enum.scalaName
-                   )(generateTopLevelEnumTrait(model, enum))
-                 }
-      } yield objs.toSet ++ alts.toSet ++ enums.toSet
+        _       <- Generator.setRoot(parameters.targetRoot)
+        _       <- Generator.setScalaVersion(parameters.scalaVersion)
+        objs    <- ZIO.foreach(model.objects.filter(_.isTopLevel)) { obj =>
+                     Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
+                       Packages.models,
+                       obj.scalaName
+                     )(generateTopLevelObjectClass(model, obj))
+                   }
+        dynObjs <- ZIO.foreach(model.dynamicObjects.filter(_.isTopLevel)) { dynObj =>
+                     Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
+                       Packages.models,
+                       dynObj.scalaName
+                     )(generateTopLevelDynamicObjectClass(model, dynObj))
+                   }
+        alts    <- ZIO.foreach(model.alternatives.filter(_.isTopLevel)) { alt =>
+                     Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
+                       Packages.models,
+                       alt.scalaName
+                     )(generateTopLevelAlternativesTrait(model, alt))
+                   }
+        enums   <- ZIO.foreach(model.enums.filter(_.isTopLevel)) { enum =>
+                     Generator.generateScalaPackage[Any, OpenAIGeneratorFailure](
+                       Packages.models,
+                       enum.scalaName
+                     )(generateTopLevelEnumTrait(model, enum))
+                   }
+      } yield objs.toSet ++ dynObjs.toSet ++ alts.toSet ++ enums.toSet
 
     generate.provide(
       Generator.live
     )
   }
 
-  protected def getObjectFieldsAsParams(model: Model, obj: TypeDefinition.Object) =
-    obj.fields.map { field =>
+  protected def getObjectFieldsAsParams(model: Model, fields: List[Field]) =
+    fields.map { field =>
       val fieldType = field.typ.scalaType(model)
       val fieldName = field.scalaNameTerm
 
@@ -76,7 +83,7 @@ trait ModelGenerator { this: HasParameters =>
 
     val typ = obj.scalaType(model)
 
-    val fields = getObjectFieldsAsParams(model, obj)
+    val fields = getObjectFieldsAsParams(model, obj.fields)
 
     val caseClassName = ScalaType(Packages.zioSchema / "Schema", s"CaseClass${fields.size}")
 
@@ -109,13 +116,15 @@ trait ModelGenerator { this: HasParameters =>
 
     ZIO
       .foreach(obj.children(model)) {
-        case child: TypeDefinition.Object       =>
+        case child: TypeDefinition.Object        =>
           generateObjectClass(model, child)
-        case child: TypeDefinition.Alternatives =>
+        case child: TypeDefinition.Alternatives  =>
           generateAlternativesTrait(model, child)
-        case child: TypeDefinition.Enum         =>
+        case child: TypeDefinition.Enum          =>
           generateEnumTrait(model, child)
-        case _                                  =>
+        case child: TypeDefinition.DynamicObject =>
+          generateDynamicObjectClass(model, child)
+        case _                                   =>
           ZIO.fail(OpenAIGeneratorFailure.UnsupportedChildType)
       }
       .map { children =>
@@ -128,6 +137,66 @@ trait ModelGenerator { this: HasParameters =>
                 ..${children.flatten}
               }
           """
+        )
+      }
+  }
+
+  private def generateTopLevelDynamicObjectClass(
+    model: Model,
+    obj: TypeDefinition.DynamicObject
+  ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] =
+    generateDynamicObjectClass(model, obj).map { cls =>
+      q"""
+     import zio.openai.model.{jsonObjectSchema, nonEmptyChunkSchema}
+
+     ..$cls
+     """
+    }
+
+  private def generateDynamicObjectClass(
+    model: Model,
+    obj: TypeDefinition.DynamicObject
+  ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, List[Stat]] = {
+    val typ = obj.scalaType(model)
+
+    val knownFields = getObjectFieldsAsParams(model, obj.knownFields) // TODO
+
+    val schema =
+      q"""
+         implicit lazy val schema: ${Types.schemaOf(typ).typ} =
+           jsonObjectSchema.transform(${typ.term}.apply, _.values)
+       """
+
+    ZIO
+      .foreach(obj.children(model)) {
+        case child: TypeDefinition.Object        =>
+          generateObjectClass(model, child)
+        case child: TypeDefinition.Alternatives  =>
+          generateAlternativesTrait(model, child)
+        case child: TypeDefinition.Enum          =>
+          generateEnumTrait(model, child)
+        case child: TypeDefinition.DynamicObject =>
+          generateDynamicObjectClass(model, child)
+        case _                                   =>
+          ZIO.fail(OpenAIGeneratorFailure.UnsupportedChildType)
+      }
+      .map { children =>
+        List[Stat](
+          q"""final case class ${typ.typName}(values: ${ScalaType
+            .map(ScalaType.string, Types.json)
+            .typ})
+                    extends ${Types.dynamicObjectOf(typ).init} {
+
+                override protected def updateValues(updated: Map[String, Json]): ${typ.typ} =
+                  copy(values = updated)
+              }
+            """,
+          q"""
+          object ${typ.termName} {
+            $schema
+            ..${children.flatten}
+          }
+      """
         )
       }
   }

@@ -49,7 +49,7 @@ trait APIGenerator {
         endpoint.hasSingleBodyParameter(model) match {
           case Some(obj) =>
             val cons = endpoint.body.get.typ.scalaType(model).term
-            val fieldList = getObjectFieldsAsParams(model, obj)
+            val fieldList = getObjectFieldsAsParams(model, obj.fields)
             val fieldNames = obj.fields.map(_.scalaName).map(Term.Name(_))
             val flat: Defn.Def =
               q"""def ${endpoint.methodName}(..$fieldList): ${Types

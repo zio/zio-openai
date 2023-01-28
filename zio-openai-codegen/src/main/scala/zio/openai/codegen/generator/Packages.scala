@@ -8,6 +8,8 @@ object Packages {
   val zioConstraintless: Package = zio / "constraintless"
   val zioHttp: Package = zio / "http"
   val zioHttpModel: Package = zioHttp / "model"
+  val zioJson: Package = zio / "json"
+  val zioJsonAst: Package = zioJson / "ast"
   val zioSchema: Package = zio / "schema"
   val zioSchemaCodec: Package = zioSchema / "codec"
 

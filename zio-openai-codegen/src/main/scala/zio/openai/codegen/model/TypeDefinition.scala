@@ -33,6 +33,8 @@ sealed trait TypeDefinition {
         TypeDefinition.Alternatives(directName, parentName, alternatives.map(_.transformEnums(f)))
       case e @ TypeDefinition.Enum(name, directName, values)                  => f(e)
       case TypeDefinition.Ref(name)                                           => this
+      case TypeDefinition.DynamicObject(directName, parentName, knownFields)  =>
+        TypeDefinition.DynamicObject(directName, parentName, knownFields.map(_.transformEnums(f)))
     }
 }
 
@@ -194,6 +196,14 @@ object TypeDefinition {
       model.types(referencedName).scalaType(model)
   }
 
+  final case class DynamicObject(
+    directName: String,
+    parentName: Option[String],
+    knownFields: List[Field]
+  ) extends TypeDefinition with NonPrimitive {
+    override val description: _root_.scala.Option[String] = None
+  }
+
   def from(parents: ParentChain, directName: String, schema: Schema[?]): TypeDefinition =
     Option(schema.get$ref()) match {
       case Some(ref) => Ref(ref)
@@ -214,20 +224,28 @@ object TypeDefinition {
               val props = Option(schema.getProperties).map(_.asScala).getOrElse(Map.empty)
               val reqd = Option(schema.getRequired).map(_.asScala).getOrElse(List.empty)
 
-              Object(
-                directName,
-                parents.name,
-                Option(schema.getDescription),
-                fields = props.map { case (fieldName, fieldSchema) =>
-                  Field(
-                    fieldName,
-                    TypeDefinition.from(parents / directName, fieldName, fieldSchema),
-                    reqd.contains(fieldName),
-                    Option(fieldSchema.getNullable).exists(_.booleanValue()),
-                    Option(fieldSchema.getDescription)
-                  )
-                }.toList
-              )
+              if (props.isEmpty) {
+                DynamicObject(
+                  directName,
+                  parents.name,
+                  knownFields = Nil // TODO
+                )
+              } else {
+                Object(
+                  directName,
+                  parents.name,
+                  Option(schema.getDescription),
+                  fields = props.map { case (fieldName, fieldSchema) =>
+                    Field(
+                      fieldName,
+                      TypeDefinition.from(parents / directName, fieldName, fieldSchema),
+                      reqd.contains(fieldName),
+                      Option(fieldSchema.getNullable).exists(_.booleanValue()),
+                      Option(fieldSchema.getDescription)
+                    )
+                  }.toList
+                )
+              }
 
             case "boolean" =>
               PrimitiveBoolean

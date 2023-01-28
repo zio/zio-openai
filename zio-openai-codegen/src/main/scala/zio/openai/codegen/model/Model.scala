@@ -22,6 +22,11 @@ final case class Model(
       o
     }.toList
 
+  lazy val dynamicObjects: List[TypeDefinition.DynamicObject] =
+    finalTypes.collect { case (_, o: TypeDefinition.DynamicObject) =>
+      o
+    }.toList
+
   lazy val alternatives: List[TypeDefinition.Alternatives] =
     finalTypes.collect { case (_, a: TypeDefinition.Alternatives) =>
       a

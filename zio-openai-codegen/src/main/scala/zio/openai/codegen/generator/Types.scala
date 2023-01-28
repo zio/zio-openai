@@ -28,6 +28,8 @@ object Types {
 
   val secret: ScalaType = ScalaType(Packages.zio / "Config", "Secret")
 
+  val json: ScalaType = ScalaType(Packages.zioJsonAst, "Json")
+
   val zhttpBody: ScalaType = ScalaType(Packages.zioHttp, "Body")
   val zhttpClient: ScalaType = ScalaType(Packages.zioHttp, "Client")
   val zhttpHeaderNames: ScalaType = ScalaType(Packages.zioHttpModel, "HeaderNames")
@@ -50,5 +52,6 @@ object Types {
 
   val openAIConfig: ScalaType = ScalaType(Packages.openai, "OpenAIConfig")
   val decoders: ScalaType = ScalaType(Packages.internal, "Decoders")
+  def dynamicObjectOf(self: ScalaType): ScalaType = ScalaType(Packages.internal, "DynamicObject", self)
   val encoders: ScalaType = ScalaType(Packages.internal, "Encoders")
 }

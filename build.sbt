@@ -22,3 +22,6 @@ lazy val zioOpenAI = Project("zio-openai", file("zio-openai"))
     )
   )
   .enablePlugins(ZioOpenAICodegenPlugin)
+
+lazy val examples = Project("zio-openai-examples", file("zio-openai-examples"))
+  .dependsOn(zioOpenAI)
