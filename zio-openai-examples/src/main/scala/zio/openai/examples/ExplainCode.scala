@@ -13,7 +13,7 @@ object ExplainCode extends ZIOAppDefault {
     for {
       response <- Completions.createCompletion(
                     model = "code-davinci-002",
-                    prompt = Some(
+                    prompt =
                       Prompt.String(
                         """class Log:
                           |    def __init__(self, path):
@@ -45,19 +45,18 @@ object ExplainCode extends ZIOAppDefault {
                           |                state["last"] = event
                           |        return state
                           |
-                          |""\u0022
+                          |'''
                           |Here's what the above class is doing:
                           |1.""".stripMargin
-                      )
-                    ),
-                    temperature = Some(Temperature(0.0)),
-                    maxTokens = Some(MaxTokens(64)),
-                    topP = Some(TopP(1.0)),
-                    frequencyPenalty = Some(FrequencyPenalty(0.0)),
-                    presencePenalty = Some(PresencePenalty(0.0)),
-                    stop = Some(Stop.String("\"\"\""))
+                      ),
+                    temperature = Temperature(0.0),
+                    maxTokens = MaxTokens(64),
+                    topP = TopP(1.0),
+                    frequencyPenalty = FrequencyPenalty(0.0),
+                    presencePenalty = PresencePenalty(0.0),
+                    stop = Stop.String("'''")
                   )
-      _ <- Console.printLine(response.choices.headOption.flatMap(_.text).getOrElse("No response"))
+      _ <- Console.printLine(response.choices.headOption.flatMap(_.text.toOption).getOrElse("No response"))
     } yield ()
 
   def run =

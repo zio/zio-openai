@@ -160,7 +160,7 @@ trait APIGenerator {
                 param.name
               )}, ${Types.encoders.term}.toURLSegment(value)) }"""
             }
-            q"""${Types.zhttpQueryParams.term}(List(..$optionalPairs).flatten.map { case (k, v) => (k, ${Types.chunk_.term}(v)) }.toMap)"""
+            q"""${Types.zhttpQueryParams.term}(List(..$optionalPairs).map(_.toOption).flatten.map { case (k, v) => (k, ${Types.chunk_.term}(v)) }.toMap)"""
           } else {
             val pairs = queryParameters.map { param =>
               q"""(${Lit.String(
@@ -323,7 +323,7 @@ trait APIGenerator {
       if (param.isRequired) {
         param"""${param.paramName}: ${paramTyp.typ}"""
       } else {
-        param"""${param.paramName}: ${ScalaType.option(paramTyp).typ}"""
+        param"""${param.paramName}: ${Types.optional(paramTyp).typ}"""
       }
     } ++ endpoint.body.toList.map { body =>
       val bodyTyp = body.typ.scalaType(model)

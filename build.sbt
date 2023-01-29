@@ -12,6 +12,7 @@ lazy val root = (project in file("."))
 
 lazy val zioOpenAI = Project("zio-openai", file("zio-openai"))
   .settings(
+    scalacOptions += "-deprecation",
     libraryDependencies ++= Seq(
       "dev.zio" %% "zio"             % "2.0.6",
       "dev.zio" %% "zio-http"        % "0.0.4",
@@ -24,4 +25,7 @@ lazy val zioOpenAI = Project("zio-openai", file("zio-openai"))
   .enablePlugins(ZioOpenAICodegenPlugin)
 
 lazy val examples = Project("zio-openai-examples", file("zio-openai-examples"))
+  .settings(
+    scalacOptions += "-deprecation",
+  )
   .dependsOn(zioOpenAI)

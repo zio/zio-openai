@@ -50,6 +50,14 @@ object Types {
   val typeListCons = ScalaType(Packages.zioConstraintless / "TypeList", "::")
   val typeListEnd = ScalaType(Packages.zioConstraintless / "TypeList", "End")
 
+  def optional(t: ScalaType): ScalaType =
+    ScalaType(Packages.zioPrelude / "data", "Optional", t)
+
+  val optionalAbsent: ScalaType =
+    ScalaType(Packages.zioPrelude / "data" / "Optional", "Absent")
+  val optionalPresent: ScalaType =
+    ScalaType(Packages.zioPrelude / "data" / "Optional", "Present")
+
   def subtypeOf(sup: ScalaType): ScalaType = ScalaType(Packages.zioPrelude, "Subtype", sup)
 
   val openAIConfig: ScalaType = ScalaType(Packages.openai, "OpenAIConfig")

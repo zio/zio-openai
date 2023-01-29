@@ -61,11 +61,11 @@ trait ModelGenerator { this: HasParameters =>
       val fieldName = field.scalaNameTerm
 
       if (field.isNullable || !field.isRequired) {
-        val p = param"$fieldName: ${ScalaType.option(fieldType).typ}"
+        val p = param"$fieldName: ${Types.optional(fieldType).typ}"
         if (!field.isRequired && allowDefaults)
-          param"$fieldName: ${ScalaType.option(fieldType).typ} = None"
+          param"$fieldName: ${Types.optional(fieldType).typ} = ${Types.optionalAbsent.term}"
         else
-          param"$fieldName: ${ScalaType.option(fieldType).typ}"
+          param"$fieldName: ${Types.optional(fieldType).typ}"
       } else
         param"$fieldName: ${fieldType.typ}"
     }
@@ -76,7 +76,7 @@ trait ModelGenerator { this: HasParameters =>
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] =
     generateObjectClass(model, obj).map { cls =>
       q"""
-     import zio.openai.internal.{jsonObjectSchema, nonEmptyChunkSchema}
+     import zio.openai.internal.{jsonObjectSchema, nonEmptyChunkSchema, optionalSchema}
 
      ..$cls
      """
@@ -100,10 +100,10 @@ trait ModelGenerator { this: HasParameters =>
       if (field.isNullable || !field.isRequired)
         q"""${Types.schemaField.term}(
             ${Lit.String(field.name)},
-            ${Types.schema_.term}[${ScalaType.option(fieldType).typ}],
+            ${Types.schema_.term}[${Types.optional(fieldType).typ}],
             get0 = obj => obj.${field.scalaNameTerm},
-            set0 = (obj: ${typ.typ}, v: ${ScalaType
-          .option(fieldType)
+            set0 = (obj: ${typ.typ}, v: ${Types
+          .optional(fieldType)
           .typ}) => obj.copy(${field.scalaNameTerm} = v)
        )"""
       else
@@ -118,7 +118,9 @@ trait ModelGenerator { this: HasParameters =>
       q"""${caseClassName.term}(
          ${Types.typeId.term}.parse(${Lit.String(typ.asString)}),
          ..$fieldSchemas,
-         (..$fieldsWithoutDefaults) => ${typ.termName}(..${obj.fields.map(field => field.scalaNameTerm)})
+         (..$fieldsWithoutDefaults) => ${typ.termName}(..${obj.fields.map(field =>
+        field.scalaNameTerm
+      )})
        )"""
 
     ZIO
@@ -156,7 +158,7 @@ trait ModelGenerator { this: HasParameters =>
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] =
     generateDynamicObjectClass(model, obj).map { cls =>
       q"""
-     import zio.openai.internal.{jsonObjectSchema, nonEmptyChunkSchema}
+     import zio.openai.internal.{jsonObjectSchema, nonEmptyChunkSchema, optionalSchema}
 
      ..$cls
      """
@@ -174,7 +176,7 @@ trait ModelGenerator { this: HasParameters =>
         val fieldType = field.typ.scalaType(model)
         val fieldName = field.scalaNameTerm
 
-        q"""def ${fieldName}: Option[${fieldType.typ}] =
+        q"""def ${fieldName}: ${Types.optional(fieldType).typ} =
              values.get(${Lit.String(field.name)}).flatMap(_.as[${fieldType.typ}].toOption)
          """
       }
@@ -217,7 +219,7 @@ trait ModelGenerator { this: HasParameters =>
               import _root_.zio.json._
               ${typ.termName}(List(..${obj.knownFields.map(field =>
             q"${field.scalaNameTerm}.flatMap(value => value.toJsonAST.toOption.map(json => ${Lit
-              .String(field.name)} -> json))"
+              .String(field.name)} -> json)).toOption"
           )}).flatten.toMap)
             }
 
@@ -235,7 +237,7 @@ trait ModelGenerator { this: HasParameters =>
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] =
     generateAlternativesTrait(model, alt).map { cls =>
       q"""
-     import zio.openai.internal.{jsonObjectSchema, nonEmptyChunkSchema}
+     import zio.openai.internal.{jsonObjectSchema, nonEmptyChunkSchema, optionalSchema}
 
      ..$cls
      """
@@ -313,7 +315,7 @@ trait ModelGenerator { this: HasParameters =>
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] =
     generateEnumTrait(model, enum).map { cls =>
       q"""
-     import zio.openai.internal.{jsonObjectSchema, nonEmptyChunkSchema}
+     import zio.openai.internal.{jsonObjectSchema, nonEmptyChunkSchema, optionalSchema}
 
      ..$cls
      """

@@ -2,6 +2,7 @@ package zio.openai
 
 import zio.json.ast.Json
 import zio.prelude._
+import zio.prelude.data.Optional
 import zio.schema.{ DynamicValue, Schema, StandardType, TypeId }
 import zio.{ Chunk, NonEmptyChunk }
 
@@ -18,6 +19,14 @@ package object internal {
           chunk
             .nonEmptyOrElse[Either[String, NonEmptyChunk[A]]](Left("Must be non-empty"))(Right(_)),
         (nonEmptyChunk: NonEmptyChunk[A]) => Right(nonEmptyChunk.toChunk)
+      )
+
+  implicit def optionalSchema[A: Schema]: Schema[Optional[A]] =
+    Schema
+      .option[A]
+      .transform(
+        Optional.OptionIsNullable,
+        _.toOption
       )
 
   // TODO: zio-schema needs to directly encode Dynamic into JSON
