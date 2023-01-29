@@ -15,7 +15,7 @@ object Image extends ZIOAppDefault {
   def createImageFromPrompt =
     for {
       response <- Images.createImage(
-                    "A cure baby sea otter",
+                    "A cute baby sea otter",
                     n = N(2),
                     size = Size.`1024x1024`,
                     responseFormat = ResponseFormat.B64_json,
