@@ -261,6 +261,14 @@ trait APIGenerator {
       if (isSvcDeprecated) liveBase.copy(mods = Mod.Annot(init"deprecated()") :: liveBase.mods)
       else liveBase
 
+    val defaultBase =
+      q"""def default: ${Types.zlayer(ScalaType.any, Types.throwable, svc).typ} =
+            ${Types.zhttpClient.term}.default >>> live
+       """
+    val default =
+      if (isSvcDeprecated) defaultBase.copy(mods = Mod.Annot(init"deprecated()") :: defaultBase.mods)
+      else defaultBase
+
     ZIO.succeed {
       Term.Block(
         List(
@@ -269,6 +277,7 @@ trait APIGenerator {
           q"""
            object ${svc.termName} {
              $live
+             $default
   
              ..$accessorMethods
   
