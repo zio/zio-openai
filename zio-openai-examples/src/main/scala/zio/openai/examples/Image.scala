@@ -7,6 +7,9 @@ import zio.openai.model.{ N, ResponseFormat, Size }
 
 import java.util.Base64
 
+/**
+ * Based on https://beta.openai.com/docs/api-reference/images
+ */
 object Image extends ZIOAppDefault {
 
   def createImageFromPrompt =
