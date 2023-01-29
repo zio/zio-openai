@@ -55,14 +55,18 @@ trait ModelGenerator { this: HasParameters =>
     )
   }
 
-  protected def getObjectFieldsAsParams(model: Model, fields: List[Field]) =
+  protected def getObjectFieldsAsParams(model: Model, fields: List[Field], allowDefaults: Boolean) =
     fields.map { field =>
       val fieldType = field.typ.scalaType(model)
       val fieldName = field.scalaNameTerm
 
-      if (field.isNullable || !field.isRequired)
-        param"$fieldName: ${ScalaType.option(fieldType).typ}"
-      else
+      if (field.isNullable || !field.isRequired) {
+        val p = param"$fieldName: ${ScalaType.option(fieldType).typ}"
+        if (!field.isRequired && allowDefaults)
+          param"$fieldName: ${ScalaType.option(fieldType).typ} = None"
+        else
+          param"$fieldName: ${ScalaType.option(fieldType).typ}"
+      } else
         param"$fieldName: ${fieldType.typ}"
     }
 
@@ -85,7 +89,8 @@ trait ModelGenerator { this: HasParameters =>
 
     val typ = obj.scalaType(model)
 
-    val fields = getObjectFieldsAsParams(model, obj.fields)
+    val fields = getObjectFieldsAsParams(model, obj.fields, allowDefaults = true)
+    val fieldsWithoutDefaults = getObjectFieldsAsParams(model, obj.fields, allowDefaults = false)
 
     val caseClassName = ScalaType(Packages.zioSchema / "Schema", s"CaseClass${fields.size}")
 
@@ -113,7 +118,7 @@ trait ModelGenerator { this: HasParameters =>
       q"""${caseClassName.term}(
          ${Types.typeId.term}.parse(${Lit.String(typ.asString)}),
          ..$fieldSchemas,
-         (..$fields) => ${typ.termName}(..${obj.fields.map(field => field.scalaNameTerm)})
+         (..$fieldsWithoutDefaults) => ${typ.termName}(..${obj.fields.map(field => field.scalaNameTerm)})
        )"""
 
     ZIO
@@ -163,7 +168,7 @@ trait ModelGenerator { this: HasParameters =>
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, List[Stat]] = {
     val typ = obj.scalaType(model)
 
-    val knownFieldParams = getObjectFieldsAsParams(model, obj.knownFields)
+    val knownFieldParams = getObjectFieldsAsParams(model, obj.knownFields, allowDefaults = true)
     val knownFieldGetters =
       obj.knownFields.map { field =>
         val fieldType = field.typ.scalaType(model)

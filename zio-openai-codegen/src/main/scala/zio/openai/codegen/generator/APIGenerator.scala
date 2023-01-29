@@ -48,7 +48,7 @@ trait APIGenerator {
         endpoint.hasSingleBodyParameter(model) match {
           case Some(obj) =>
             val cons = endpoint.body.get.typ.scalaType(model).term
-            val fieldList = getObjectFieldsAsParams(model, obj.fields)
+            val fieldList = getObjectFieldsAsParams(model, obj.fields, allowDefaults = true)
             val fieldNames = obj.fields.map(_.scalaName).map(Term.Name(_))
             val flat: Defn.Def =
               q"""def ${endpoint.methodName}(..$fieldList): ${Types
@@ -75,19 +75,46 @@ trait APIGenerator {
       }
 
     val accessorMethods =
-      api.endpoints.map { endpoint =>
+      api.endpoints.flatMap { endpoint =>
         val paramList = getParamList(model, endpoint)
         val paramRefs = getParamRefs(endpoint)
         val responseType = endpoint.responseType(model)
+
         val base =
           q"""def ${endpoint.methodName}(..$paramList): ${Types
             .zio(svc, Types.throwable, responseType)
             .typ} =
-              ${Types.zio_.term}.serviceWithZIO(_.${endpoint.methodName}(..$paramRefs))
-         """
+            ${Types.zio_.term}.serviceWithZIO(_.${endpoint.methodName}(..$paramRefs))
+       """
 
-        if (endpoint.isDeprecated) base.copy(mods = Mod.Annot(init"deprecated()") :: base.mods)
-        else base
+        endpoint.hasSingleBodyParameter(model) match {
+          case Some(obj) =>
+            val cons = endpoint.body.get.typ.scalaType(model).term
+            val fieldList = getObjectFieldsAsParams(model, obj.fields, allowDefaults = true)
+            val fieldNames = obj.fields.map(_.scalaName).map(Term.Name(_))
+            val flat: Defn.Def =
+              q"""def ${endpoint.methodName}(..$fieldList): ${Types
+                .zio(svc, Types.throwable, responseType)
+                .typ} =
+                  ${endpoint.methodName}($cons(..$fieldNames))
+             """
+
+            List(
+              if (endpoint.isDeprecated)
+                base.copy(mods = Mod.Annot(init"deprecated()") :: base.mods)
+              else base,
+              if (endpoint.isDeprecated)
+                flat.copy(mods = Mod.Annot(init"deprecated()") :: flat.mods)
+              else flat
+            )
+
+          case None =>
+            List(
+              if (endpoint.isDeprecated)
+                base.copy(mods = Mod.Annot(init"deprecated()") :: base.mods)
+              else base
+            )
+        }
       }
 
     val implMethods =
@@ -145,9 +172,9 @@ trait APIGenerator {
 
         val url =
           if (hasQueryParams)
-            q"""baseURL.setPath($path).setQueryParams($queryParams)"""
+            q"""baseURL.setPath(baseURL.path ++ $path).setQueryParams($queryParams)"""
           else
-            q"""baseURL.setPath($path)"""
+            q"""baseURL.setPath(baseURL.path ++ $path)"""
 
         val body =
           endpoint.body match {
@@ -266,7 +293,8 @@ trait APIGenerator {
             ${Types.zhttpClient.term}.default >>> live
        """
     val default =
-      if (isSvcDeprecated) defaultBase.copy(mods = Mod.Annot(init"deprecated()") :: defaultBase.mods)
+      if (isSvcDeprecated)
+        defaultBase.copy(mods = Mod.Annot(init"deprecated()") :: defaultBase.mods)
       else defaultBase
 
     ZIO.succeed {
