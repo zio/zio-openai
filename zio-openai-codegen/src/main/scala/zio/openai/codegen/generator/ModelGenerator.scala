@@ -7,6 +7,8 @@ import zio.openai.codegen.model.{ Field, Model, TypeDefinition }
 
 import scala.meta.*
 
+// TODO: optional fields must not be included as "null" in the encoded JSON!
+
 // TODO: add scaladoc support to metagen and use the description field
 // TODO: verify that non-required vs required-nullable works properly
 

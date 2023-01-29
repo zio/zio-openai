@@ -27,5 +27,8 @@ lazy val zioOpenAI = Project("zio-openai", file("zio-openai"))
 lazy val examples = Project("zio-openai-examples", file("zio-openai-examples"))
   .settings(
     scalacOptions += "-deprecation",
+    libraryDependencies ++= Seq(
+      "dev.zio" %% "zio-nio" % "2.0.0"
+    )
   )
   .dependsOn(zioOpenAI)
