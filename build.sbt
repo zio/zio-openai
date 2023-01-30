@@ -14,21 +14,23 @@ lazy val zioOpenAI = Project("zio-openai", file("zio-openai"))
   .settings(
     scalacOptions += "-deprecation",
     libraryDependencies ++= Seq(
-      "dev.zio" %% "zio"             % "2.0.6",
-      "dev.zio" %% "zio-http"        % "0.0.4",
-      "dev.zio" %% "zio-json"        % "0.4.2",
-      "dev.zio" %% "zio-prelude"     % "1.0.0-RC16",
-      "dev.zio" %% "zio-schema"      % "0.4.6+2-a471f726+20230130-1929-SNAPSHOT",
-      "dev.zio" %% "zio-schema-json" % "0.4.6+2-a471f726+20230130-1929-SNAPSHOT"
-    )
+      "dev.zio" %% "zio"                   % "2.0.6",
+      "dev.zio" %% "zio-http"              % "0.0.4",
+      "dev.zio" %% "zio-json"              % "0.4.2",
+      "dev.zio" %% "zio-nio"               % "2.0.0",
+      "dev.zio" %% "zio-prelude"           % "1.0.0-RC16",
+      "dev.zio" %% "zio-schema"            % "0.4.6+2-a471f726+20230130-1929-SNAPSHOT",
+      "dev.zio" %% "zio-schema-json"       % "0.4.6+2-a471f726+20230130-1929-SNAPSHOT",
+      "dev.zio" %% "zio-schema-derivation" % "0.4.6+2-a471f726+20230130-1929-SNAPSHOT",
+      "dev.zio" %% "zio-test"              % "2.0.6" % Test,
+      "dev.zio" %% "zio-test-sbt"          % "2.0.6" % Test
+    ),
+    testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
   )
   .enablePlugins(ZioOpenAICodegenPlugin)
 
 lazy val examples = Project("zio-openai-examples", file("zio-openai-examples"))
   .settings(
-    scalacOptions += "-deprecation",
-    libraryDependencies ++= Seq(
-      "dev.zio" %% "zio-nio" % "2.0.0"
-    )
+    scalacOptions += "-deprecation"
   )
   .dependsOn(zioOpenAI)

@@ -131,7 +131,7 @@ trait APIGenerator {
             basePathString
           else
             pathParameters.foldLeft[Term](basePathString) { case (str, param) =>
-              val litParamName = Lit.String(param.name)
+              val litParamName = Lit.String("{" + param.name + "}")
               if (param.isRequired) {
                 q"""
                   $str.replace(
@@ -280,7 +280,7 @@ trait APIGenerator {
             for {
               client <- ${Types.zio_.term}.service[${Types.zhttpClient.typ}]
               config <- ${Types.zio_.term}.config(${Types.openAIConfig.term}.config).orDie
-              boundary <- ${Types.random.term}.nextUUID.map(uuid => "--------" + uuid.toString.replace("-", ""))
+              boundary <- ${Types.random.term}.nextUUID.map(uuid => "------" + uuid.toString.replace("-", ""))
             } yield new Live(client, config.baseURL, config.apiKey, boundary)
           }
        """

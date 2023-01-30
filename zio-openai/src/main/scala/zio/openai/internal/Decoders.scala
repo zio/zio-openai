@@ -30,7 +30,9 @@ private[openai] object Decoders {
         }
       } else {
         // TODO
-        ZIO.fail(new RuntimeException(s"Request returned with ${response.status}"))
+        response.body.asString.flatMap { body =>
+          ZIO.fail(new RuntimeException(s"Request returned with ${response.status}: $body"))
+        }
       }
   }
 }

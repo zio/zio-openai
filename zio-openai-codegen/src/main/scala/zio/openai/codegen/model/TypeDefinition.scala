@@ -117,7 +117,7 @@ object TypeDefinition {
     override val description: Option[String] = None
 
     override def scalaType(model: Model): ScalaType =
-      Types.chunkOf(ScalaType.byte)
+      Types.file
   }
 
   final case object PrimitiveInteger extends TypeDefinition {

@@ -7,9 +7,8 @@ import zio.openai.model.{ N, ResponseFormat, Size }
 
 import java.util.Base64
 
-/**
- * Based on https://beta.openai.com/docs/api-reference/images
- */
+/** Based on https://beta.openai.com/docs/api-reference/images
+  */
 object Image extends ZIOAppDefault {
 
   def createImageFromPrompt =
@@ -18,8 +17,7 @@ object Image extends ZIOAppDefault {
                     "A cute baby sea otter",
                     n = N(2),
                     size = Size.`1024x1024`,
-                    responseFormat = ResponseFormat.B64_json,
-                    user = "test"
+                    responseFormat = ResponseFormat.B64_json
                   )
       _        <- ZIO.foreachDiscard(response.data.zipWithIndex) { case (data, idx) =>
                     val imageData = Base64.getDecoder.decode(data.b64Json.getOrElse(""))

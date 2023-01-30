@@ -3,6 +3,7 @@ package zio.openai.internal
 import zio.{ Chunk, ZIO, ZOutputStream }
 import zio.constraintless.{ IsElementOf, TypeList }
 import zio.http.{ Body, Response }
+import zio.openai.model.File
 import zio.schema.{ Schema, StandardType }
 import zio.schema.codec.BinaryCodecs
 
@@ -42,7 +43,8 @@ object Encoders {
     try {
       toMultipartFormDataBody(Schema[T], value, boundary, Chunk.empty, output)
       output.flush()
-      Right(Body.fromChunk(Chunk.fromArray(buffer.toByteArray)))
+      val bytes = Chunk.fromArray(buffer.toByteArray)
+      Right(Body.fromChunk(bytes))
     } catch {
       case NonFatal(err) =>
         Left(err.getMessage)
@@ -62,17 +64,27 @@ object Encoders {
     }
 
     schema match {
-      case _: Schema.Enum[_]                    =>
+      case _ if schema == File.schema                    =>
+        output.write(header.toArray)
+        output.write(value.asInstanceOf[File].data.toArray)
+      case _: Schema.Enum[_]                             =>
         throw new IllegalArgumentException("Cannot encode enum as multipart/form-data")
-      case record: Schema.Record[_]             =>
+      case record: Schema.Record[_]                      =>
         if (header.isEmpty) {
-          for (field <- record.fields) {
+          for ((field, idx) <- record.fields.zipWithIndex) {
             val headerBuilder = new StringBuilder()
+            headerBuilder.append("--")
             headerBuilder.append(boundary)
             headerBuilder.append('\n')
             headerBuilder.append("Content-Disposition: form-data; name=\"")
             headerBuilder.append(field.name)
-            headerBuilder.append("\"\n\n")
+            headerBuilder.append("\"")
+            if (field.schema == File.schema) {
+              headerBuilder.append(
+                s"""; filename="${field.get(value).asInstanceOf[File].fileName}""""
+              )
+            }
+            headerBuilder.append("\n\n")
             val header = Chunk.fromArray(headerBuilder.toString().getBytes(StandardCharsets.UTF_8))
 
             toMultipartFormDataBody(
@@ -82,19 +94,31 @@ object Encoders {
               header,
               output
             )
+            if (idx < (record.fields.length - 1))
+              output.write('\n')
           }
+          writeString("--")
           writeString(boundary)
           writeString("--")
         } else {
           throw new IllegalArgumentException("Cannot encode nested record as multipart/form-data")
         }
-      case _: Schema.Collection[_, _]           =>
+      case Schema.Sequence(elemSchema, _, toChunk, _, _) =>
+        elemSchema.asInstanceOf[Schema[_]] match {
+          case Schema.Primitive(StandardType.ByteType, _) =>
+            val data = toChunk(value).asInstanceOf[Chunk[Byte]]
+            output.write(header.toArray)
+            output.write(data.toArray)
+          case _                                          =>
+            throw new IllegalArgumentException("Cannot encode collections as multipart/form-data")
+        }
+      case _: Schema.Collection[_, _]                    =>
         throw new IllegalArgumentException("Cannot encode collections as multipart/form-data")
-      case Schema.Transform(schema, _, g, _, _) =>
+      case Schema.Transform(schema, _, g, _, _)          =>
         g(value).map { inner =>
           toMultipartFormDataBody(schema, inner, boundary, header, output)
         }
-      case Schema.Primitive(standardType, _)    =>
+      case Schema.Primitive(standardType, _)             =>
         standardType match {
           case StandardType.UnitType   =>
           case StandardType.StringType =>
@@ -111,7 +135,7 @@ object Encoders {
           case _                       =>
             writeString(value.toString)
         }
-      case Schema.Optional(inner, _)            =>
+      case Schema.Optional(inner, _)                     =>
         value.asInstanceOf[Option[Any]] match {
           case Some(innerValue) =>
             toMultipartFormDataBody(inner, innerValue, boundary, header, output)

@@ -89,18 +89,19 @@ package object internal {
         Left("Set is not supported")
       case DynamicValue.Primitive(value, standardType) =>
         Right(standardType.asInstanceOf[StandardType[_]] match {
-          case StandardType.UnitType   => Json.Obj()
-          case StandardType.StringType => Json.Str(value.asInstanceOf[String])
-          case StandardType.BoolType   => Json.Bool(value.asInstanceOf[Boolean])
-          case StandardType.ByteType   => Json.Num(value.asInstanceOf[Byte])
-          case StandardType.ShortType  => Json.Num(value.asInstanceOf[Short])
-          case StandardType.IntType    => Json.Num(value.asInstanceOf[Int])
-          case StandardType.LongType   => Json.Num(value.asInstanceOf[Long])
-          case StandardType.FloatType  => Json.Num(value.asInstanceOf[Float])
-          case StandardType.DoubleType => Json.Num(value.asInstanceOf[Double])
-          case StandardType.BinaryType =>
+          case StandardType.UnitType       => Json.Obj()
+          case StandardType.StringType     => Json.Str(value.asInstanceOf[String])
+          case StandardType.BoolType       => Json.Bool(value.asInstanceOf[Boolean])
+          case StandardType.ByteType       => Json.Num(value.asInstanceOf[Byte])
+          case StandardType.ShortType      => Json.Num(value.asInstanceOf[Short])
+          case StandardType.IntType        => Json.Num(value.asInstanceOf[Int])
+          case StandardType.LongType       => Json.Num(value.asInstanceOf[Long])
+          case StandardType.FloatType      => Json.Num(value.asInstanceOf[Float])
+          case StandardType.DoubleType     => Json.Num(value.asInstanceOf[Double])
+          case StandardType.BigDecimalType => Json.Num(value.asInstanceOf[java.math.BigDecimal])
+          case StandardType.BinaryType     =>
             Json.Str(Base64.getEncoder.encodeToString(value.asInstanceOf[Chunk[Byte]].toArray))
-          case _                       => Json.Str(value.toString)
+          case _                           => Json.Str(value.toString)
         })
       case DynamicValue.Singleton(instance)            =>
         Right(Json.Obj())

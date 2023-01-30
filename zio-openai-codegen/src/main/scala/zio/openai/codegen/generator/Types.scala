@@ -66,4 +66,5 @@ object Types {
   def dynamicObjectOf(self: ScalaType): ScalaType =
     ScalaType(Packages.internal, "DynamicObject", self)
   val encoders: ScalaType = ScalaType(Packages.internal, "Encoders")
+  val file: ScalaType = ScalaType(Packages.models, "File")
 }
