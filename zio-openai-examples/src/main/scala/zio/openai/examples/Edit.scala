@@ -3,9 +3,8 @@ package zio.openai.examples
 import zio.{ Console, ZIOAppDefault }
 import zio.openai.Edits
 
-/**
- * Based on https://beta.openai.com/docs/api-reference/edits
- */
+/** Based on https://beta.openai.com/docs/api-reference/edits
+  */
 object Edit extends ZIOAppDefault {
 
   def createEdit =

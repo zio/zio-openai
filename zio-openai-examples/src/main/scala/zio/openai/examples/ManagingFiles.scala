@@ -1,8 +1,8 @@
 package zio.openai.examples
 
-import zio.{Chunk, Console, ZIOAppDefault}
+import zio.{ Chunk, Console, ZIOAppDefault }
 import zio.openai.Files
-import zio.openai.model.{File, FineTune}
+import zio.openai.model.{ File, FineTune }
 
 import java.nio.charset.StandardCharsets
 

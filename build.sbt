@@ -1,36 +1,91 @@
-ThisBuild / scalaVersion     := "2.13.10"
-ThisBuild / version          := "0.1.0-SNAPSHOT"
-ThisBuild / organization     := "dev.zio"
-ThisBuild / organizationName := "zio"
+import BuildHelper._
+
+inThisBuild(
+  List(
+    organization  := "dev.zio",
+    homepage      := Some(url("https://zio.dev/zio-flow/")),
+    licenses      := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
+    developers    := List(
+      Developer(
+        "jdegoes",
+        "John De Goes",
+        "john@degoes.net",
+        url("http://degoes.net")
+      ),
+      Developer(
+        "vigoo",
+        "Daniel Vigovszky",
+        "daniel.vigovszky@gmail.com",
+        url("https://vigoo.github.io/")
+      )
+    ),
+    resolvers +=
+      "Sonatype OSS Snapshots 01" at "https://s01.oss.sonatype.org/content/repositories/snapshots",
+    pgpPassphrase := sys.env.get("PGP_PASSWORD").map(_.toArray),
+    pgpPublicRing := file("/tmp/public.asc"),
+    pgpSecretRing := file("/tmp/secret.asc"),
+    resolvers +=
+      "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
+  )
+)
+
+addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
+addCommandAlias("fix", "; all compile:scalafix test:scalafix; all scalafmtSbt scalafmtAll")
+addCommandAlias(
+  "check",
+  "; scalafmtSbtCheck; scalafmtCheckAll; compile:scalafix --check; test:scalafix --check"
+)
 
 lazy val root = (project in file("."))
   .settings(
-    name           := "zio-openai",
-    publish / skip := true
+    name               := "zio-openai",
+    publish / skip     := true,
+    crossScalaVersions := Nil
   )
-  .aggregate(zioOpenAI)
+  .aggregate(zioOpenAI, examples, docs)
 
 lazy val zioOpenAI = Project("zio-openai", file("zio-openai"))
+  .settings(stdSettings("zio-openai"))
+  .settings(buildInfoSettings("zio.openai"))
   .settings(
-    scalacOptions += "-deprecation",
     libraryDependencies ++= Seq(
-      "dev.zio" %% "zio"                   % "2.0.6",
-      "dev.zio" %% "zio-http"              % "0.0.4",
-      "dev.zio" %% "zio-json"              % "0.4.2",
-      "dev.zio" %% "zio-nio"               % "2.0.0",
-      "dev.zio" %% "zio-prelude"           % "1.0.0-RC16",
-      "dev.zio" %% "zio-schema"            % "0.4.6+2-a471f726+20230130-1929-SNAPSHOT",
-      "dev.zio" %% "zio-schema-json"       % "0.4.6+2-a471f726+20230130-1929-SNAPSHOT",
-      "dev.zio" %% "zio-schema-derivation" % "0.4.6+2-a471f726+20230130-1929-SNAPSHOT",
-      "dev.zio" %% "zio-test"              % "2.0.6" % Test,
-      "dev.zio" %% "zio-test-sbt"          % "2.0.6" % Test
+      "dev.zio" %% "zio"                   % Dependencies.zio,
+      "dev.zio" %% "zio-http"              % Dependencies.zioHttp,
+      "dev.zio" %% "zio-json"              % Dependencies.zioJson,
+      "dev.zio" %% "zio-nio"               % Dependencies.zioNio,
+      "dev.zio" %% "zio-prelude"           % Dependencies.zioPrelude,
+      "dev.zio" %% "zio-schema"            % Dependencies.zioSchema,
+      "dev.zio" %% "zio-schema-json"       % Dependencies.zioSchema,
+      "dev.zio" %% "zio-schema-derivation" % Dependencies.zioSchema,
+      "dev.zio" %% "zio-test"              % Dependencies.zio % Test,
+      "dev.zio" %% "zio-test-sbt"          % Dependencies.zio % Test
     ),
     testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
   )
   .enablePlugins(ZioOpenAICodegenPlugin)
 
 lazy val examples = Project("zio-openai-examples", file("zio-openai-examples"))
+  .settings(stdSettings("zio-openai-examples"))
   .settings(
-    scalacOptions += "-deprecation"
+    publish / skip := true
   )
   .dependsOn(zioOpenAI)
+
+lazy val docs = project
+  .in(file("zio-openai-docs"))
+  .settings(stdSettings("zio-openai"))
+  .settings(macroDefinitionSettings)
+  .settings(
+    scalaVersion                               := Scala213,
+    publish / skip                             := true,
+    moduleName                                 := "zio-openai-docs",
+    scalacOptions -= "-Yno-imports",
+    scalacOptions -= "-Xfatal-warnings",
+    projectName                                := "ZIO OpenAI",
+    mainModuleName                             := (zioOpenAI / moduleName).value,
+    projectStage                               := ProjectStage.Development,
+    docsPublishBranch                          := "master",
+    ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(zioOpenAI)
+  )
+  .dependsOn(zioOpenAI)
+  .enablePlugins(WebsitePlugin)
