@@ -280,7 +280,7 @@ object TypeDefinition {
                     Field(
                       fieldName,
                       TypeDefinition.from(parents / directName, fieldName, fieldSchema),
-                      reqd.contains(fieldName),
+                      isRequiredOverride(directName, fieldName).getOrElse(reqd.contains(fieldName)),
                       Option(fieldSchema.getNullable).exists(_.booleanValue()),
                       Option(fieldSchema.getDescription)
                     )
@@ -385,5 +385,15 @@ object TypeDefinition {
       )
     } else {
       List.empty
+    }
+
+  // TODO: make this configurable
+  private def isRequiredOverride(objName: String, fieldName: String): Option[Boolean] =
+    if (objName == "CreateEditResponse" && fieldName == "id") {
+      Some(false)
+    } else if (objName == "CreateEditResponse" && fieldName == "model") {
+      Some(false)
+    } else {
+      None
     }
 }

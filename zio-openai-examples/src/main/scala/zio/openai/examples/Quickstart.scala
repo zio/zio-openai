@@ -1,6 +1,6 @@
 package zio.openai.examples
 
-import zio.{ Console, ZIOAppDefault }
+import zio.{ Console, ZIO, ZIOAppDefault }
 import zio.openai._
 import zio.openai.model.CreateCompletionRequest.Prompt
 import zio.openai.model.Temperature
@@ -24,11 +24,12 @@ object Quickstart extends ZIOAppDefault {
   def loop =
     for {
       animal <- Console.readLine("Animal: ")
-      _      <- Completions.createCompletion(
+      result <- Completions.createCompletion(
                   model = "text-davinci-003",
                   prompt = generatePrompt(animal),
                   temperature = Temperature(0.6)
                 )
+      _      <- Console.printLine("Names: " + result.choices.flatMap(_.text.toOption).mkString(", "))
     } yield ()
 
   override def run =

@@ -17,6 +17,7 @@ object Types {
   val caseSetEmpty: ScalaType = caseSet / "Empty"
 
   val binaryCodecs: ScalaType = ScalaType(Packages.zioSchemaCodec, "BinaryCodecs")
+  val noDiscriminator: ScalaType = ScalaType(Packages.zioSchemaAnnotation, "noDiscriminator")
   def schemaOf(typ: ScalaType): ScalaType = ScalaType(Packages.zioSchema, "Schema", typ)
   val schema_ : ScalaType = ScalaType(Packages.zioSchema, "Schema")
   def schemaCaseOf(parent: ScalaType, cons: ScalaType): ScalaType =

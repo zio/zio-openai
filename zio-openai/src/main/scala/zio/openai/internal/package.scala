@@ -3,6 +3,7 @@ package zio.openai
 import zio.json.ast.Json
 import zio.prelude._
 import zio.prelude.data.Optional
+import zio.schema.annotation.directDynamicMapping
 import zio.schema.{ DynamicValue, Schema, StandardType, TypeId }
 import zio.{ Chunk, NonEmptyChunk }
 
@@ -29,26 +30,27 @@ package object internal {
         _.toOption
       )
 
-  // TODO: zio-schema needs to directly encode Dynamic into JSON
   implicit lazy val jsonObjectSchema: Schema[Map[String, Json]] =
-    Schema.dynamicValue.transformOrFail[Map[String, Json]](
-      {
-        case DynamicValue.Record(_, record) =>
-          record.toList
-            .foldLeftM(Map.empty[String, Json]) { case (acc, (k, v)) =>
-              dynamicValueToJson(v).map((json: Json) => acc + (k -> json))
-            }
-        case _                              =>
-          Left("Must be a record")
-      },
-      fields =>
-        Right(
-          DynamicValue.Record(
-            TypeId.Structural,
-            ListMap.from(fields.map { case (k, v) => k -> jsonToDynamicValue(v) })
+    Schema.dynamicValue
+      .annotate(directDynamicMapping())
+      .transformOrFail[Map[String, Json]](
+        {
+          case DynamicValue.Record(_, record) =>
+            record.toList
+              .foldLeftM(Map.empty[String, Json]) { case (acc, (k, v)) =>
+                dynamicValueToJson(v).map((json: Json) => acc + (k -> json))
+              }
+          case _                              =>
+            Left("Must be a record")
+        },
+        fields =>
+          Right(
+            DynamicValue.Record(
+              TypeId.Structural,
+              ListMap.from(fields.map { case (k, v) => k -> jsonToDynamicValue(v) })
+            )
           )
-        )
-    )
+      )
 
   private def jsonToDynamicValue(json: Json): DynamicValue =
     json match {

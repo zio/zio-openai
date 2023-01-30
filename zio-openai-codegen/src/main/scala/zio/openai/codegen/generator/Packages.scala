@@ -12,6 +12,7 @@ object Packages {
   val zioJsonAst: Package = zioJson / "ast"
   val zioPrelude: Package = zio / "prelude"
   val zioSchema: Package = zio / "schema"
+  val zioSchemaAnnotation: Package = zioSchema / "annotation"
   val zioSchemaCodec: Package = zioSchema / "codec"
 
   val openai: Package = zio / "openai"

@@ -298,11 +298,14 @@ trait ModelGenerator { this: HasParameters =>
         q"""
             object ${typ.termName} {
 
-            implicit lazy val schema: ${Types.schemaOf(typ).typ} =
+            private lazy val baseSchema: ${Types.schemaOf(typ).typ} =
               ${Types.schemaEnumN.term}(
                 ${Types.typeId.term}.parse(${Lit.String(typ.asString)}),
                 $caseSetChain
               )
+            implicit lazy val schema: ${Types
+          .schemaOf(typ)
+          .typ} = baseSchema.annotate(${Types.noDiscriminator.term}())
 
            ..$cases
           }
