@@ -52,7 +52,7 @@ lazy val zioOpenAI = Project("zio-openai", file("zio-openai"))
       "dev.zio" %% "zio"                   % Dependencies.zio,
       "dev.zio" %% "zio-http"              % Dependencies.zioHttp,
       "dev.zio" %% "zio-json"              % Dependencies.zioJson,
-      "dev.zio" %% "zio-nio"               % Dependencies.zioNio exclude ("org.scala-lang.modules", "scala-collection-compat_2.13"),
+      "dev.zio" %% "zio-nio"               % Dependencies.zioNio,
       "dev.zio" %% "zio-prelude"           % Dependencies.zioPrelude,
       "dev.zio" %% "zio-schema"            % Dependencies.zioSchema,
       "dev.zio" %% "zio-schema-json"       % Dependencies.zioSchema,
