@@ -32,10 +32,14 @@ object BuildHelper {
     "-encoding",
     "UTF-8",
     "-feature",
-    "-unchecked"
+    "-unchecked",
+    "-Wconf:cat=unused-params&src=src_managed/.*:s",
+    "-Wconf:cat=unused-imports&src=src_managed/.*:s",
+    "-Wconf:cat=deprecation&src=src_managed/.*:s",
+    "-Wconf:cat=lint-deprecation&src=src_managed/.*:s"
   ) ++ {
     if (sys.env.contains("CI")) {
-      Seq("-Xfatal-warnings")
+      Seq("-Wconf:any:e")
     } else {
       Nil // to enable Scalafix locally
     }
@@ -46,9 +50,8 @@ object BuildHelper {
     "-language:existentials",
     "-explaintypes",
     "-Yrangepos",
-    "-Xlint:_,-missing-interpolator,-type-parameter-shadow",
     "-Ywarn-numeric-widen",
-    "-Ywarn-value-discard"
+    "-Ywarn-value-discard",
   )
 
   private def optimizerOptions(optimize: Boolean) =
@@ -157,14 +160,12 @@ object BuildHelper {
         )
       case Some((2, 13)) =>
         Seq(
-          "-Ywarn-unused:params,-implicits"
+          "-Ywarn-unused:-implicits"
         ) ++ std2xOptions ++ optimizerOptions(optimize)
       case Some((2, 12)) =>
         Seq(
           "-opt-warnings",
           "-Ywarn-extra-implicit",
-          "-Ywarn-unused:_,imports",
-          "-Ywarn-unused:imports",
           "-Ypartial-unification",
           "-Yno-adapted-args",
           "-Ywarn-inaccessible",
@@ -177,21 +178,6 @@ object BuildHelper {
           "-Xmax-classfile-name",
           "242"
         ) ++ std2xOptions ++ optimizerOptions(optimize)
-      case Some((2, 11)) =>
-        Seq(
-          "-Ypartial-unification",
-          "-Yno-adapted-args",
-          "-Ywarn-inaccessible",
-          "-Ywarn-infer-any",
-          "-Ywarn-nullary-override",
-          "-Ywarn-nullary-unit",
-          "-Xexperimental",
-          "-Ywarn-unused-import",
-          "-Xfuture",
-          "-Xsource:2.13",
-          "-Xmax-classfile-name",
-          "242"
-        ) ++ std2xOptions
       case _             => Seq.empty
     }
 

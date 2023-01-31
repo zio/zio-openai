@@ -115,7 +115,7 @@ object Encoders {
       case _: Schema.Collection[_, _]                    =>
         throw new IllegalArgumentException("Cannot encode collections as multipart/form-data")
       case Schema.Transform(schema, _, g, _, _)          =>
-        g(value).map { inner =>
+        g(value).foreach { inner =>
           toMultipartFormDataBody(schema, inner, boundary, header, output)
         }
       case Schema.Primitive(standardType, _)             =>
