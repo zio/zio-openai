@@ -138,7 +138,13 @@ object Encoders {
       case Schema.Optional(inner, _)                     =>
         value.asInstanceOf[Option[Any]] match {
           case Some(innerValue) =>
-            toMultipartFormDataBody[Any](inner.asInstanceOf[Schema[Any]], innerValue, boundary, header, output)
+            toMultipartFormDataBody[Any](
+              inner.asInstanceOf[Schema[Any]],
+              innerValue,
+              boundary,
+              header,
+              output
+            )
           case None             =>
         }
 
