@@ -11,7 +11,7 @@ Library for using the [OpenAI API](https://beta.openai.com/docs/introduction/ove
 ## Introduction
 
 This library provides Scala data types and ZIO services for using the OpenAI API.
-The [examples](tree/main/zio-openai-examples/src/main/scala/zio/openai/examples) directory contains a
+The [examples](https://github.com/zivergetech/zio-openai/tree/main/zio-openai-examples/src/main/scala/zio/openai/examples) directory contains a
 few examples
 of how to use the different features of the library.
 
