@@ -160,7 +160,7 @@ trait APIGenerator {
                 param.name
               )}, ${Types.encoders.term}.toURLSegment(value)) }"""
             }
-            q"""${Types.zhttpQueryParams.term}(List(..$optionalPairs).map(_.toOption).flatten.map { case (k, v) => (k, ${Types.chunk_.term}(v)) }.toMap)"""
+            q"""${Types.zhttpQueryParams.term}(List(..$optionalPairs).map(_.toOption).flatten.map { case (k, v) => (k, ${Types.chunk_.term}(v)) } : _*)"""
           } else {
             val pairs = queryParameters.map { param =>
               q"""(${Lit.String(

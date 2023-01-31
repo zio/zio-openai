@@ -78,10 +78,11 @@ trait ModelGenerator { this: HasParameters =>
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] =
     generateObjectClass(model, obj).map { cls =>
       q"""
-     import zio.openai.internal.{jsonObjectSchema, nonEmptyChunkSchema, optionalSchema}
+       import scala.language.dynamics
+       import zio.openai.internal.{jsonObjectSchema, nonEmptyChunkSchema, optionalSchema}
 
-     ..$cls
-     """
+       ..$cls
+       """
     }
 
   private def generateObjectClass(
@@ -160,9 +161,10 @@ trait ModelGenerator { this: HasParameters =>
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] =
     generateDynamicObjectClass(model, obj).map { cls =>
       q"""
-     import zio.openai.internal.{jsonObjectSchema, nonEmptyChunkSchema, optionalSchema}
+       import scala.language.dynamics
+       import zio.openai.internal.{jsonObjectSchema, nonEmptyChunkSchema, optionalSchema}
 
-     ..$cls
+       ..$cls
      """
     }
 
@@ -239,9 +241,10 @@ trait ModelGenerator { this: HasParameters =>
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] =
     generateAlternativesTrait(model, alt).map { cls =>
       q"""
-     import zio.openai.internal.{jsonObjectSchema, nonEmptyChunkSchema, optionalSchema}
+       import scala.language.dynamics
+       import zio.openai.internal.{jsonObjectSchema, nonEmptyChunkSchema, optionalSchema}
 
-     ..$cls
+       ..$cls
      """
     }
 
@@ -320,7 +323,8 @@ trait ModelGenerator { this: HasParameters =>
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] =
     generateEnumTrait(model, enum).map { cls =>
       q"""
-     import zio.openai.internal.{jsonObjectSchema, nonEmptyChunkSchema, optionalSchema}
+      import scala.language.dynamics
+      import zio.openai.internal.{jsonObjectSchema, nonEmptyChunkSchema, optionalSchema}
 
      ..$cls
      """
@@ -337,7 +341,7 @@ trait ModelGenerator { this: HasParameters =>
       enum.values.map { value =>
         val name = Term.Name(value.capitalize)
         q"""
-          final case object $name extends ${typ.init}
+          case object $name extends ${typ.init}
          """
       }
 

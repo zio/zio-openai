@@ -41,10 +41,11 @@ lazy val root = (project in file("."))
     publish / skip     := true,
     crossScalaVersions := Nil
   )
-  .aggregate(zioOpenAI, examples, docs)
+  .aggregate(zioOpenAI, examples)
 
 lazy val zioOpenAI = Project("zio-openai", file("zio-openai"))
   .settings(stdSettings("zio-openai"))
+  .settings(dottySettings)
   .settings(buildInfoSettings("zio.openai"))
   .settings(
     libraryDependencies ++= Seq(
@@ -65,6 +66,7 @@ lazy val zioOpenAI = Project("zio-openai", file("zio-openai"))
 
 lazy val examples = Project("zio-openai-examples", file("zio-openai-examples"))
   .settings(stdSettings("zio-openai-examples"))
+  .settings(dottySettings)
   .settings(
     publish / skip := true
   )
