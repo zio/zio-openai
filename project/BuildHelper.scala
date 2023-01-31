@@ -51,7 +51,7 @@ object BuildHelper {
     "-explaintypes",
     "-Yrangepos",
     "-Ywarn-numeric-widen",
-    "-Ywarn-value-discard",
+    "-Ywarn-value-discard"
   )
 
   private def optimizerOptions(optimize: Boolean) =

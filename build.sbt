@@ -41,7 +41,7 @@ lazy val root = (project in file("."))
     publish / skip     := true,
     crossScalaVersions := Nil
   )
-  .aggregate(zioOpenAI, examples)
+  .aggregate(zioOpenAI, examples, docs)
 
 lazy val zioOpenAI = Project("zio-openai", file("zio-openai"))
   .settings(stdSettings("zio-openai"))
