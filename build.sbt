@@ -29,11 +29,10 @@ inThisBuild(
   )
 )
 
-addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
-addCommandAlias("fix", "; all compile:scalafix test:scalafix; all scalafmtSbt scalafmtAll")
+addCommandAlias("fmt", "all scalafmtSbt scalafmtAll")
 addCommandAlias(
   "check",
-  "; scalafmtSbtCheck; scalafmtCheckAll; compile:scalafix --check; test:scalafix --check"
+  "; scalafmtSbtCheck; scalafmtCheckAll"
 )
 
 lazy val root = (project in file("."))
@@ -52,7 +51,7 @@ lazy val zioOpenAI = Project("zio-openai", file("zio-openai"))
       "dev.zio" %% "zio"                   % Dependencies.zio,
       "dev.zio" %% "zio-http"              % Dependencies.zioHttp,
       "dev.zio" %% "zio-json"              % Dependencies.zioJson,
-      "dev.zio" %% "zio-nio"               % Dependencies.zioNio,
+      "dev.zio" %% "zio-nio"               % Dependencies.zioNio exclude ("org.scala-lang.modules", "scala-collection-compat_2.13"),
       "dev.zio" %% "zio-prelude"           % Dependencies.zioPrelude,
       "dev.zio" %% "zio-schema"            % Dependencies.zioSchema,
       "dev.zio" %% "zio-schema-json"       % Dependencies.zioSchema,
@@ -84,7 +83,7 @@ lazy val docs = project
     projectName                                := "ZIO OpenAI",
     mainModuleName                             := (zioOpenAI / moduleName).value,
     projectStage                               := ProjectStage.Development,
-    docsPublishBranch                          := "master",
+    docsPublishBranch                          := "main",
     ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(zioOpenAI)
   )
   .dependsOn(zioOpenAI)
