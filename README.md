@@ -70,10 +70,6 @@ Start by adding `zio-openai` as a dependency to your project:
 libraryDependencies += "dev.zio" %% "zio-openai" % "<version>"
 ```
 
-[//]: # (TODO: Add example section)
-
-[//]: # (## Example)
-
 ## Documentation
 
 Learn more on the [ZIO OpenAI homepage](https://zio.dev/zio-flow/)!

@@ -43,7 +43,7 @@ trait APIGenerator {
         val paramList = getParamList(model, endpoint)
         val responseType = endpoint.responseType(model)
         val base: Decl.Def =
-          q"def ${endpoint.methodName}(..$paramList): ${Types.zio(ScalaType.any, Types.throwable, responseType).typ}"
+          q"def ${endpoint.methodName}(..$paramList): ${Types.zio(ScalaType.any, Types.openAIFailure, responseType).typ}"
 
         endpoint.hasSingleBodyParameter(model) match {
           case Some(obj) =>
@@ -52,7 +52,7 @@ trait APIGenerator {
             val fieldNames = obj.fields.map(_.scalaName).map(Term.Name(_))
             val flat: Defn.Def =
               q"""def ${endpoint.methodName}(..$fieldList): ${Types
-                .zio(ScalaType.any, Types.throwable, responseType)
+                .zio(ScalaType.any, Types.openAIFailure, responseType)
                 .typ} =
                   ${endpoint.methodName}($cons(..$fieldNames))
              """
@@ -82,7 +82,7 @@ trait APIGenerator {
 
         val base =
           q"""def ${endpoint.methodName}(..$paramList): ${Types
-            .zio(svc, Types.throwable, responseType)
+            .zio(svc, Types.openAIFailure, responseType)
             .typ} =
             ${Types.zio_.term}.serviceWithZIO(_.${endpoint.methodName}(..$paramRefs))
        """
@@ -94,7 +94,7 @@ trait APIGenerator {
             val fieldNames = obj.fields.map(_.scalaName).map(Term.Name(_))
             val flat: Defn.Def =
               q"""def ${endpoint.methodName}(..$fieldList): ${Types
-                .zio(svc, Types.throwable, responseType)
+                .zio(svc, Types.openAIFailure, responseType)
                 .typ} =
                   ${endpoint.methodName}($cons(..$fieldNames))
              """
@@ -184,7 +184,7 @@ trait APIGenerator {
             case Some(RequestBody(ContentType.`multipart/form-data`, typ)) =>
               val bodyType = typ.scalaType(model)
               q"""${Types.zio_.term}.fromEither(${Types.encoders.term}.toMultipartFormDataBody[${bodyType.typ}]($bodyParam, this.boundary))
-                      .mapError(new java.lang.RuntimeException(_))
+                      .mapError(${Types.openAIFailure.term}.EncodingError(_))
                """
             case None                                                      =>
               q"""${Types.zio_.term}.succeed(${Types.zhttpBody.term}.empty)"""
@@ -209,9 +209,9 @@ trait APIGenerator {
           endpoint.response match {
             case Some(responseBody) if responseBody.contentType == ContentType.`application/json` =>
               val responseType = responseBody.typ.scalaType(model)
-              q"""${Types.decoders.term}.tryDecodeJsonResponse[${responseType.typ}](this.codecs, response)"""
+              q"""${Types.decoders.term}.tryDecodeJsonResponse[${responseType.typ}](this.codecs, req, response)"""
             case None                                                                             =>
-              q"""${Types.decoders.term}.validateEmptyResponse(response)"""
+              q"""${Types.decoders.term}.validateEmptyResponse(req, response)"""
             case _                                                                                =>
               throw new IllegalArgumentException(
                 s"Unsupported response content type: ${endpoint.response}"
@@ -220,13 +220,15 @@ trait APIGenerator {
 
         val base =
           q"""def ${endpoint.methodName}(..$paramList): ${Types
-            .zio(ScalaType.any, Types.throwable, responseType)
-            .typ} =
+            .zio(ScalaType.any, Types.openAIFailure, responseType)
+            .typ} = {
                 $body.flatMap { body =>
-                  client.request($request).flatMap { response =>
+                  val req = $request
+                  client.request(req).mapError(${Types.openAIFailure.term}.Unknown(_)).flatMap { response =>
                     $mapResponse
                   }
                 }
+              }
           """
 
         if (endpoint.isDeprecated) base.copy(mods = Mod.Annot(init"deprecated()") :: base.mods)
