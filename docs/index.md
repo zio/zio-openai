@@ -69,7 +69,3 @@ Start by adding `zio-openai` as a dependency to your project:
 ```scala
 libraryDependencies += "dev.zio" %% "zio-openai" % "<version>"
 ```
-
-[//]: # (TODO: Add example section)
-
-[//]: # (## Example)

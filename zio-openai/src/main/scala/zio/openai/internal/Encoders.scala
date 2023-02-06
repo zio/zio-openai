@@ -1,13 +1,13 @@
 package zio.openai.internal
 
-import zio.{ Chunk, ZIO, ZOutputStream }
+import zio.Chunk
 import zio.constraintless.{ IsElementOf, TypeList }
-import zio.http.{ Body, Response }
+import zio.http.Body
 import zio.openai.model.File
-import zio.schema.{ Schema, StandardType }
 import zio.schema.codec.BinaryCodecs
+import zio.schema.{ Schema, StandardType }
 
-import java.io.{ ByteArrayOutputStream, DataOutputStream, OutputStream, OutputStreamWriter, Writer }
+import java.io.{ ByteArrayOutputStream, DataOutputStream }
 import java.nio.charset.StandardCharsets
 import scala.util.control.NonFatal
 
