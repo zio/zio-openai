@@ -5,9 +5,8 @@ import zio.ZIO
 import zio.nio.file.Path
 import zio.openai.codegen.model.{ Field, Model, TypeDefinition }
 
+import scala.collection.mutable
 import scala.meta.*
-
-// TODO: add scaladoc support to metagen and use the description field
 
 trait ModelGenerator { this: HasParameters =>
   def generateModels(
@@ -123,33 +122,39 @@ trait ModelGenerator { this: HasParameters =>
       )})
        )"""
 
-    ZIO
-      .foreach(obj.children(model)) {
-        case child: TypeDefinition.Object        =>
-          generateObjectClass(model, child)
-        case child: TypeDefinition.Alternatives  =>
-          generateAlternativesTrait(model, child)
-        case child: TypeDefinition.Enum          =>
-          generateEnumTrait(model, child)
-        case child: TypeDefinition.DynamicObject =>
-          generateDynamicObjectClass(model, child)
-        case child: TypeDefinition.SmartNewType  =>
-          generateSmartNewType(model, child)
-        case _                                   =>
-          ZIO.fail(OpenAIGeneratorFailure.UnsupportedChildType)
-      }
-      .map { children =>
-        List[Stat](
-          q"""final case class ${typ.typName}(..$fields)""",
-          q"""
+    for {
+      children        <-
+        ZIO
+          .foreach(obj.children(model)) {
+            case child: TypeDefinition.Object        =>
+              generateObjectClass(model, child)
+            case child: TypeDefinition.Alternatives  =>
+              generateAlternativesTrait(model, child)
+            case child: TypeDefinition.Enum          =>
+              generateEnumTrait(model, child)
+            case child: TypeDefinition.DynamicObject =>
+              generateDynamicObjectClass(model, child)
+            case child: TypeDefinition.SmartNewType  =>
+              generateSmartNewType(model, child)
+            case _                                   =>
+              ZIO.fail(OpenAIGeneratorFailure.UnsupportedChildType)
+          }
+      caseClassDocText = buildScaladoc(
+                           obj.directName + " model",
+                           obj.description,
+                           obj.fields.map(field => (field.scalaName -> field.description))
+                         )
+      caseClassDoc    <- CodeFileGenerator.addScaladoc(caseClassDocText)
+    } yield List[Stat](
+      q"""$caseClassDoc final case class ${typ.typName}(..$fields)""",
+      q"""
               object ${typ.termName} {
                 implicit val schema: ${Types.schemaOf(typ).typ} = $schema
 
                 ..${children.flatten}
               }
           """
-        )
-      }
+    )
   }
 
   private def generateTopLevelDynamicObjectClass(
@@ -447,5 +452,35 @@ trait ModelGenerator { this: HasParameters =>
         )
       )
     }
+  }
+
+  private def buildScaladoc(
+    title: String,
+    mainDescription: Option[String],
+    params: List[(String, Option[String])]
+  ): String = {
+    val builder = new mutable.StringBuilder
+    builder.append(title)
+    builder.append("\n")
+    mainDescription.foreach { desc =>
+      builder.append("\n")
+      builder.append(desc)
+    }
+    params.foreach { case (name, description) =>
+      builder.append("\n")
+      builder.append("@param ")
+      builder.append(name)
+      description.foreach { desc =>
+        builder.append(" ")
+        builder.append(
+          desc.linesIterator
+            .filterNot(_.isEmpty)
+            .map(l => "       " + l)
+            .mkString("\n")
+        )
+      }
+    }
+    builder.append("\n")
+    builder.toString
   }
 }
