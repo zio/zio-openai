@@ -482,11 +482,11 @@ trait ModelGenerator { this: HasParameters =>
     params: List[(String, Option[String])]
   ): String = {
     val builder = new mutable.StringBuilder
-    builder.append(title)
+    builder.append(sanitizeDocString(title))
     builder.append("\n")
     mainDescription.foreach { desc =>
       builder.append("\n")
-      builder.append(desc)
+      builder.append(sanitizeDocString(desc))
     }
     params.foreach { case (name, description) =>
       builder.append("\n")
@@ -497,7 +497,7 @@ trait ModelGenerator { this: HasParameters =>
         builder.append(
           desc.linesIterator
             .filterNot(_.isEmpty)
-            .map(l => "       " + l)
+            .map(l => "       " + sanitizeDocString(l))
             .mkString("\n")
         )
       }
@@ -505,4 +505,9 @@ trait ModelGenerator { this: HasParameters =>
     builder.append("\n")
     builder.toString
   }
+
+  private def sanitizeDocString(text: String): String =
+    text
+      .replaceAll("\\[\\[", "[ [")
+      .replaceAll("]]", "] ]")
 }
