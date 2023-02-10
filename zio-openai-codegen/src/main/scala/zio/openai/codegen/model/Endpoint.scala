@@ -12,7 +12,8 @@ final case class Endpoint(
   isDeprecated: Boolean,
   parameters: List[Parameter],
   body: Option[RequestBody],
-  response: Option[ResponseBody]
+  response: Option[ResponseBody],
+  summary: Option[String]
 ) {
   def methodName: Term.Name = Term.Name(name)
 

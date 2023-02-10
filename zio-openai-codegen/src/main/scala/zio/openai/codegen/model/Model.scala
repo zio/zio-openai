@@ -77,7 +77,7 @@ final case class Model(
             (result, mapping + (enum -> existing))
           case None           =>
             // This is the first duplicate enum
-            val unified = TypeDefinition.Enum(enum.directName, None, enum.values)
+            val unified = TypeDefinition.Enum(enum.directName, None, enum.values, enum.description)
             (unified :: result, mapping + (enum -> unified))
         }
       }
@@ -130,17 +130,17 @@ object Model {
 
   private def collectReferencedTypes(types: Seq[TypeDefinition]): Map[String, TypeDefinition] =
     types.flatMap {
-      case obj @ TypeDefinition.Object(_, _, _, fields)          =>
+      case obj @ TypeDefinition.Object(_, _, _, fields)             =>
         Map(obj.name -> obj) ++ collectReferencedTypes(fields.map(_.typ))
-      case alt @ TypeDefinition.Alternatives(_, _, alternatives) =>
+      case alt @ TypeDefinition.Alternatives(_, _, alternatives, _) =>
         Map(alt.name -> alt) ++ collectReferencedTypes(alternatives)
-      case arr @ TypeDefinition.Array(itemType)                  =>
+      case arr @ TypeDefinition.Array(itemType)                     =>
         Map(arr.name -> arr) ++ collectReferencedTypes(Seq(itemType))
-      case arr @ TypeDefinition.NonEmptyArray(itemType)          =>
+      case arr @ TypeDefinition.NonEmptyArray(itemType)             =>
         Map(arr.name -> arr) ++ collectReferencedTypes(Seq(itemType))
-      case arr @ TypeDefinition.ConstrainedArray(itemType, _, _) =>
+      case arr @ TypeDefinition.ConstrainedArray(itemType, _, _)    =>
         Map(arr.name -> arr) ++ collectReferencedTypes(Seq(itemType))
-      case typ: TypeDefinition                                   =>
+      case typ: TypeDefinition                                      =>
         Map(typ.name -> typ)
     }.toMap
 }

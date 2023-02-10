@@ -5,9 +5,8 @@ import zio.ZIO
 import zio.nio.file.Path
 import zio.openai.codegen.model.{ Field, Model, TypeDefinition }
 
+import scala.collection.mutable
 import scala.meta.*
-
-// TODO: add scaladoc support to metagen and use the description field
 
 trait ModelGenerator { this: HasParameters =>
   def generateModels(
@@ -123,33 +122,39 @@ trait ModelGenerator { this: HasParameters =>
       )})
        )"""
 
-    ZIO
-      .foreach(obj.children(model)) {
-        case child: TypeDefinition.Object        =>
-          generateObjectClass(model, child)
-        case child: TypeDefinition.Alternatives  =>
-          generateAlternativesTrait(model, child)
-        case child: TypeDefinition.Enum          =>
-          generateEnumTrait(model, child)
-        case child: TypeDefinition.DynamicObject =>
-          generateDynamicObjectClass(model, child)
-        case child: TypeDefinition.SmartNewType  =>
-          generateSmartNewType(model, child)
-        case _                                   =>
-          ZIO.fail(OpenAIGeneratorFailure.UnsupportedChildType)
-      }
-      .map { children =>
-        List[Stat](
-          q"""final case class ${typ.typName}(..$fields)""",
-          q"""
+    for {
+      children        <-
+        ZIO
+          .foreach(obj.children(model)) {
+            case child: TypeDefinition.Object        =>
+              generateObjectClass(model, child)
+            case child: TypeDefinition.Alternatives  =>
+              generateAlternativesTrait(model, child)
+            case child: TypeDefinition.Enum          =>
+              generateEnumTrait(model, child)
+            case child: TypeDefinition.DynamicObject =>
+              generateDynamicObjectClass(model, child)
+            case child: TypeDefinition.SmartNewType  =>
+              generateSmartNewType(model, child)
+            case _                                   =>
+              ZIO.fail(OpenAIGeneratorFailure.UnsupportedChildType)
+          }
+      caseClassDocText = buildScaladoc(
+                           obj.directName + " model",
+                           obj.description,
+                           obj.fields.map(field => (field.scalaName -> field.description))
+                         )
+      caseClassDoc    <- CodeFileGenerator.addScaladoc(caseClassDocText)
+    } yield List[Stat](
+      q"""$caseClassDoc final case class ${typ.typName}(..$fields)""",
+      q"""
               object ${typ.termName} {
                 implicit val schema: ${Types.schemaOf(typ).typ} = $schema
 
                 ..${children.flatten}
               }
           """
-        )
-      }
+    )
   }
 
   private def generateTopLevelDynamicObjectClass(
@@ -188,24 +193,32 @@ trait ModelGenerator { this: HasParameters =>
            jsonObjectSchema.transform(${typ.term}.apply, _.values)
        """
 
-    ZIO
-      .foreach(obj.children(model)) {
-        case child: TypeDefinition.Object        =>
-          generateObjectClass(model, child)
-        case child: TypeDefinition.Alternatives  =>
-          generateAlternativesTrait(model, child)
-        case child: TypeDefinition.Enum          =>
-          generateEnumTrait(model, child)
-        case child: TypeDefinition.DynamicObject =>
-          generateDynamicObjectClass(model, child)
-        case _                                   =>
-          ZIO.fail(OpenAIGeneratorFailure.UnsupportedChildType)
-      }
-      .map { children =>
-        List[Stat](
-          q"""final case class ${typ.typName}(values: ${ScalaType
-            .map(ScalaType.string, Types.json)
-            .typ})
+    for {
+      children        <-
+        ZIO
+          .foreach(obj.children(model)) {
+            case child: TypeDefinition.Object        =>
+              generateObjectClass(model, child)
+            case child: TypeDefinition.Alternatives  =>
+              generateAlternativesTrait(model, child)
+            case child: TypeDefinition.Enum          =>
+              generateEnumTrait(model, child)
+            case child: TypeDefinition.DynamicObject =>
+              generateDynamicObjectClass(model, child)
+            case _                                   =>
+              ZIO.fail(OpenAIGeneratorFailure.UnsupportedChildType)
+          }
+      caseClassDocText =
+        buildScaladoc(
+          obj.directName + " model",
+          obj.description,
+          List("values" -> Some("The dynamic list of key-value pairs of the object"))
+        )
+      caseClassDoc    <- CodeFileGenerator.addScaladoc(caseClassDocText)
+    } yield List[Stat](
+      q"""$caseClassDoc final case class ${typ.typName}(values: ${ScalaType
+        .map(ScalaType.string, Types.json)
+        .typ})
                     extends ${Types.dynamicObjectOf(typ).init} {
 
                 override protected def updateValues(updated: Map[String, Json]): ${typ.typ} =
@@ -214,22 +227,21 @@ trait ModelGenerator { this: HasParameters =>
                 ..$knownFieldGetters
               }
             """,
-          q"""
+      q"""
           object ${typ.termName} {
             def apply(..$knownFieldParams): ${typ.typ} = {
               import _root_.zio.json._
               ${typ.termName}(List(..${obj.knownFields.map(field =>
-            q"${field.scalaNameTerm}.flatMap(value => value.toJsonAST.toOption.map(json => ${Lit
-              .String(field.name)} -> json)).toOption"
-          )}).flatten.toMap)
+        q"${field.scalaNameTerm}.flatMap(value => value.toJsonAST.toOption.map(json => ${Lit
+          .String(field.name)} -> json)).toOption"
+      )}).flatten.toMap)
             }
 
             $schema
             ..${children.flatten}
           }
       """
-        )
-      }
+    )
   }
 
   private def generateTopLevelAlternativesTrait(
@@ -292,10 +304,16 @@ trait ModelGenerator { this: HasParameters =>
         q"$prev.:+:($c)"
       }
 
-    ZIO.succeed {
-      List[Stat](
-        q"""sealed trait ${typ.typName}""",
-        q"""
+    val sealedTraitDocText = buildScaladoc(
+      alt.directName + " model",
+      alt.description,
+      Nil
+    )
+    for {
+      sealedTraitDoc <- CodeFileGenerator.addScaladoc(sealedTraitDocText)
+    } yield List[Stat](
+      q"""$sealedTraitDoc sealed trait ${typ.typName}""",
+      q"""
             object ${typ.termName} {
 
             private lazy val baseSchema: ${Types.schemaOf(typ).typ} =
@@ -304,14 +322,13 @@ trait ModelGenerator { this: HasParameters =>
                 $caseSetChain
               )
             implicit lazy val schema: ${Types
-          .schemaOf(typ)
-          .typ} = baseSchema.annotate(${Types.noDiscriminator.term}())
+        .schemaOf(typ)
+        .typ} = baseSchema.annotate(${Types.noDiscriminator.term}())
 
            ..$cases
           }
          """
-      )
-    }
+    )
   }
 
   private def generateTopLevelEnumTrait(
@@ -357,10 +374,16 @@ trait ModelGenerator { this: HasParameters =>
       }
     val toString = q"(s: ${typ.typ}) => s match { ..case $toStringMatches }"
 
-    ZIO.succeed {
-      List[Stat](
-        q"""sealed trait ${typ.typName}""",
-        q"""
+    val sealedTraitDocText = buildScaladoc(
+      `enum`.directName + " model",
+      `enum`.description,
+      Nil
+    )
+    for {
+      sealedTraitDoc <- CodeFileGenerator.addScaladoc(sealedTraitDocText)
+    } yield List[Stat](
+      q"""$sealedTraitDoc sealed trait ${typ.typName}""",
+      q"""
           object ${typ.termName} {
 
             implicit lazy val schema: ${Types.schemaOf(typ).typ} =
@@ -372,8 +395,7 @@ trait ModelGenerator { this: HasParameters =>
            ..$cases
           }
          """
-      )
-    }
+    )
   }
 
   def generateTopLevelSmartNewTypes(
@@ -405,11 +427,11 @@ trait ModelGenerator { this: HasParameters =>
 
     val assertion =
       smartNewType match {
-        case TypeDefinition.ConstrainedInteger(directName, parentName, min, max) =>
+        case TypeDefinition.ConstrainedInteger(directName, parentName, min, max, _) =>
           q"""greaterThanOrEqualTo(${Lit.Int(min)}) && lessThanOrEqualTo(${Lit.Int(max)})"""
-        case TypeDefinition.ConstrainedNumber(directName, parentName, min, max)  =>
+        case TypeDefinition.ConstrainedNumber(directName, parentName, min, max, _)  =>
           q"""greaterThanOrEqualTo(${Lit.Double(min)}) && lessThanOrEqualTo(${Lit.Double(max)})"""
-        case TypeDefinition.ConstrainedString(directName, parentName, min, max)  =>
+        case TypeDefinition.ConstrainedString(directName, parentName, min, max, _)  =>
           q"""hasLength(greaterThanOrEqualTo(${Lit.Int(min)}) && lessThanOrEqualTo(${Lit.Int(
             max
           )}))"""
@@ -427,9 +449,15 @@ trait ModelGenerator { this: HasParameters =>
       else
         q"""assert { $assertion }"""
 
-    ZIO.succeed {
-      List(
-        q"""object ${typ.termName} extends ${Types.subtypeOf(sup).init} {
+    val smartNewTypeDocText = buildScaladoc(
+      smartNewType.directName + " model",
+      smartNewType.description,
+      Nil
+    )
+    for {
+      smartNewTypeDoc <- CodeFileGenerator.addScaladoc(smartNewTypeDocText)
+    } yield List(
+      q"""object ${typ.termName} extends ${Types.subtypeOf(sup).init} {
             import zio.prelude.Assertion._
             ..$mods def assertion = $wrappedAssertion
 
@@ -438,14 +466,48 @@ trait ModelGenerator { this: HasParameters =>
 
           }
        """,
-        Defn.Type(
-          Nil,
-          typ.typName,
-          Type.ParamClause(Nil),
-          Type.Select(typ.term, Type.Name("Type")),
-          Type.Bounds(None, None)
-        )
+      Defn.Type(
+        List(smartNewTypeDoc),
+        typ.typName,
+        Type.ParamClause(Nil),
+        Type.Select(typ.term, Type.Name("Type")),
+        Type.Bounds(None, None)
       )
-    }
+    )
   }
+
+  protected def buildScaladoc(
+    title: String,
+    mainDescription: Option[String],
+    params: List[(String, Option[String])]
+  ): String = {
+    val builder = new mutable.StringBuilder
+    builder.append(sanitizeDocString(title))
+    builder.append("\n")
+    mainDescription.foreach { desc =>
+      builder.append("\n")
+      builder.append(sanitizeDocString(desc))
+    }
+    params.foreach { case (name, description) =>
+      builder.append("\n")
+      builder.append("@param ")
+      builder.append(name)
+      description.foreach { desc =>
+        builder.append(" ")
+        builder.append(
+          desc.linesIterator
+            .filterNot(_.isEmpty)
+            .map(l => "       " + sanitizeDocString(l))
+            .mkString("\n")
+        )
+      }
+    }
+    builder.append("\n")
+    builder.toString
+  }
+
+  private def sanitizeDocString(text: String): String =
+    text
+      .replaceAll("\\[\\[", "[ [")
+      .replaceAll("]]", "] ]")
 }

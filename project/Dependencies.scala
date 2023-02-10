@@ -1,6 +1,6 @@
 object Dependencies {
 
-  val zio = "2.0.6"
+  val zio = "2.0.8"
   val zioHttp = "0.0.4"
   val zioJson = "0.4.2"
   val zioNio = "2.0.1"

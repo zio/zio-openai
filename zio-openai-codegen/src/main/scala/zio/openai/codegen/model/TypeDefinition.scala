@@ -18,28 +18,51 @@ sealed trait TypeDefinition {
 
   def transform(f: TypeDefinition => TypeDefinition): TypeDefinition =
     this match {
-      case TypeDefinition.Object(directName, parentName, description, fields)             =>
+      case TypeDefinition.Object(directName, parentName, description, fields)               =>
         f(TypeDefinition.Object(directName, parentName, description, fields.map(_.transform(f))))
-      case TypeDefinition.PrimitiveBoolean                                                => f(this)
-      case TypeDefinition.PrimitiveString                                                 => f(this)
-      case TypeDefinition.ConstrainedString(directName, parentName, minLength, maxLength) => f(this)
-      case TypeDefinition.Binary                                                          => f(this)
-      case TypeDefinition.PrimitiveInteger                                                => f(this)
-      case TypeDefinition.ConstrainedInteger(directName, parentName, min, max)            => f(this)
-      case TypeDefinition.PrimitiveNumber                                                 => f(this)
-      case TypeDefinition.ConstrainedNumber(directName, parentName, min, max)             => f(this)
-      case TypeDefinition.Array(itemType)                                                 =>
+      case TypeDefinition.PrimitiveBoolean                                                  => f(this)
+      case TypeDefinition.PrimitiveString                                                   => f(this)
+      case TypeDefinition.ConstrainedString(
+            directName,
+            parentName,
+            minLength,
+            maxLength,
+            description
+          ) =>
+        f(this)
+      case TypeDefinition.Binary                                                            => f(this)
+      case TypeDefinition.PrimitiveInteger                                                  => f(this)
+      case TypeDefinition.ConstrainedInteger(directName, parentName, min, max, description) =>
+        f(this)
+      case TypeDefinition.PrimitiveNumber                                                   => f(this)
+      case TypeDefinition.ConstrainedNumber(directName, parentName, min, max, description)  =>
+        f(this)
+      case TypeDefinition.Array(itemType)                                                   =>
         f(TypeDefinition.Array(itemType.transform(f)))
-      case TypeDefinition.NonEmptyArray(itemType)                                         =>
+      case TypeDefinition.NonEmptyArray(itemType)                                           =>
         f(TypeDefinition.NonEmptyArray(itemType.transform(f)))
-      case TypeDefinition.ConstrainedArray(itemType, min, max)                            =>
+      case TypeDefinition.ConstrainedArray(itemType, min, max)                              =>
         f(TypeDefinition.ConstrainedArray(itemType.transform(f), min, max))
-      case TypeDefinition.Alternatives(directName, parentName, alternatives)              =>
-        f(TypeDefinition.Alternatives(directName, parentName, alternatives.map(_.transform(f))))
-      case TypeDefinition.Enum(name, directName, values)                                  => f(this)
-      case TypeDefinition.Ref(name)                                                       => f(this)
-      case TypeDefinition.DynamicObject(directName, parentName, knownFields)              =>
-        f(TypeDefinition.DynamicObject(directName, parentName, knownFields.map(_.transform(f))))
+      case TypeDefinition.Alternatives(directName, parentName, alternatives, description)   =>
+        f(
+          TypeDefinition.Alternatives(
+            directName,
+            parentName,
+            alternatives.map(_.transform(f)),
+            description
+          )
+        )
+      case TypeDefinition.Enum(name, directName, values, description)                       => f(this)
+      case TypeDefinition.Ref(name)                                                         => f(this)
+      case TypeDefinition.DynamicObject(directName, parentName, knownFields, description)   =>
+        f(
+          TypeDefinition.DynamicObject(
+            directName,
+            parentName,
+            knownFields.map(_.transform(f)),
+            description
+          )
+        )
     }
 }
 
@@ -104,12 +127,12 @@ object TypeDefinition {
     directName: String,
     parentName: Option[String],
     minLength: Int,
-    maxLength: Int
+    maxLength: Int,
+    description: Option[String]
   ) extends TypeDefinition with NonPrimitive with SmartNewType {
-    override val description: Option[String] = None
 
     override def withoutParent: ConstrainedString =
-      ConstrainedString(directName, None, minLength, maxLength)
+      ConstrainedString(directName, None, minLength, maxLength, description)
   }
 
   final case object Binary extends TypeDefinition {
@@ -132,12 +155,12 @@ object TypeDefinition {
     val directName: String,
     parentName: Option[String],
     min: Int,
-    max: Int
+    max: Int,
+    description: Option[String]
   ) extends TypeDefinition with NonPrimitive with SmartNewType {
-    override val description: Option[String] = None
 
     override def withoutParent: ConstrainedInteger =
-      ConstrainedInteger(directName, None, min, max)
+      ConstrainedInteger(directName, None, min, max, description)
   }
 
   final case object PrimitiveNumber extends TypeDefinition {
@@ -152,12 +175,12 @@ object TypeDefinition {
     directName: String,
     parentName: Option[String],
     min: Double,
-    max: Double
+    max: Double,
+    description: Option[String]
   ) extends TypeDefinition with NonPrimitive with SmartNewType {
-    override val description: Option[String] = None
 
     override def withoutParent: ConstrainedNumber =
-      ConstrainedNumber(directName, None, min, max)
+      ConstrainedNumber(directName, None, min, max, description)
   }
 
   final case class Array(itemType: TypeDefinition) extends TypeDefinition {
@@ -194,9 +217,9 @@ object TypeDefinition {
   final case class Alternatives(
     directName: String,
     parentName: Option[String],
-    alternatives: List[TypeDefinition]
+    alternatives: List[TypeDefinition],
+    description: Option[String]
   ) extends TypeDefinition with NonPrimitive {
-    override val description: Option[String] = None
 
     lazy val caseNames: List[String] = {
       lazy val default = alternatives.indices.map(idx => s"Case$idx").toList
@@ -223,10 +246,9 @@ object TypeDefinition {
   final case class Enum(
     directName: String,
     parentName: Option[String],
-    values: List[String]
-  ) extends TypeDefinition with NonPrimitive {
-    override val description: Option[String] = None
-  }
+    values: List[String],
+    description: Option[String]
+  ) extends TypeDefinition with NonPrimitive
 
   final case class Ref(name: String) extends TypeDefinition {
     override val description: Option[String] = None
@@ -240,12 +262,15 @@ object TypeDefinition {
   final case class DynamicObject(
     directName: String,
     parentName: Option[String],
-    knownFields: List[Field]
-  ) extends TypeDefinition with NonPrimitive {
-    override val description: _root_.scala.Option[String] = None
-  }
+    knownFields: List[Field],
+    description: Option[String]
+  ) extends TypeDefinition with NonPrimitive
 
-  def from(parents: ParentChain, directName: String, schema: Schema[?]): TypeDefinition =
+  def from(
+    parents: ParentChain,
+    directName: String,
+    schema: Schema[?]
+  ): TypeDefinition =
     Option(schema.get$ref()) match {
       case Some(ref) => Ref(ref)
       case None      =>
@@ -257,7 +282,8 @@ object TypeDefinition {
             parents.name,
             alternatives = oneOf.zipWithIndex.map { case (schema, idx) =>
               TypeDefinition.from(parents / directName, "case" + idx, schema)
-            }.toList
+            }.toList,
+            Option(schema.getDescription)
           )
         } else {
           Option(schema.getType).getOrElse("object") match {
@@ -269,7 +295,8 @@ object TypeDefinition {
                 DynamicObject(
                   directName,
                   parents.name,
-                  knownFields = getKnownFieldsFor(directName, parents)
+                  knownFields = getKnownFieldsFor(directName, parents),
+                  Option(schema.getDescription)
                 )
               } else {
                 Object(
@@ -301,7 +328,7 @@ object TypeDefinition {
                   .map(_.asScala.toList.asInstanceOf[List[String]])
                   .getOrElse(Nil)
                 if (enum.nonEmpty) {
-                  Enum(directName, parents.name, enum)
+                  Enum(directName, parents.name, enum, Option(schema.getDescription))
                 } else {
                   val minLength = Option(schema.getMinLength).map(_.intValue())
                   val maxLength = Option(schema.getMaxLength).map(_.intValue())
@@ -311,7 +338,8 @@ object TypeDefinition {
                       directName,
                       parents.name,
                       minLength.getOrElse(0),
-                      maxLength.getOrElse(Int.MaxValue)
+                      maxLength.getOrElse(Int.MaxValue),
+                      Option(schema.getDescription)
                     )
                   else
                     PrimitiveString
@@ -327,7 +355,8 @@ object TypeDefinition {
                   directName,
                   parents.name,
                   min.getOrElse(Int.MinValue),
-                  max.getOrElse(Int.MaxValue)
+                  max.getOrElse(Int.MaxValue),
+                  Option(schema.getDescription)
                 )
               else
                 PrimitiveInteger
@@ -341,7 +370,8 @@ object TypeDefinition {
                   directName,
                   parents.name,
                   min.getOrElse(Double.MinValue),
-                  max.getOrElse(Double.MaxValue)
+                  max.getOrElse(Double.MaxValue),
+                  Option(schema.getDescription)
                 )
               else
                 PrimitiveNumber
