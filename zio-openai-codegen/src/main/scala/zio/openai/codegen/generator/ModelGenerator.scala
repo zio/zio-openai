@@ -476,7 +476,7 @@ trait ModelGenerator { this: HasParameters =>
     )
   }
 
-  private def buildScaladoc(
+  protected def buildScaladoc(
     title: String,
     mainDescription: Option[String],
     params: List[(String, Option[String])]

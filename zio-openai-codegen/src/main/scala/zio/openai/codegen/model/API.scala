@@ -99,7 +99,8 @@ object API {
               Option(op.getDeprecated).exists(_.booleanValue()),
               parameters,
               body,
-              response
+              response,
+              Option(op.getSummary)
             )
           }.toList
         )
