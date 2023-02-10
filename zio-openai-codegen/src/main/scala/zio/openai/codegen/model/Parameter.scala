@@ -13,6 +13,7 @@ sealed trait Parameter {
   val name: String
   val typ: TypeDefinition
   val isRequired: Boolean
+  val description: Option[String]
 
   def paramName: Term.Name = Term.Name(name)
 

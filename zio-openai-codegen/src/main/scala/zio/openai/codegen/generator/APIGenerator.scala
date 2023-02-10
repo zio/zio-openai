@@ -3,7 +3,15 @@ package zio.openai.codegen.generator
 import io.github.vigoo.metagen.core.{ CodeFileGenerator, Generator, GeneratorFailure, ScalaType }
 import zio.ZIO
 import zio.nio.file.Path
-import zio.openai.codegen.model.{ API, ContentType, Endpoint, Model, RequestBody, ResponseBody }
+import zio.openai.codegen.model.{
+  API,
+  ContentType,
+  Endpoint,
+  Model,
+  RequestBody,
+  ResponseBody,
+  TypeDefinition
+}
 
 import scala.meta.*
 
@@ -28,6 +36,27 @@ trait APIGenerator {
       Generator.live
     )
   }
+
+  private def generateScaladoc(endpoint: Endpoint): ZIO[CodeFileGenerator, Nothing, Mod.Annot] =
+    CodeFileGenerator.addScaladoc(
+      buildScaladoc(
+        endpoint.summary.getOrElse(""),
+        None,
+        endpoint.parameters.map(param => param.name -> param.description)
+      )
+    )
+
+  private def generateFlatScaladoc(
+    endpoint: Endpoint,
+    obj: TypeDefinition.Object
+  ): ZIO[CodeFileGenerator, Nothing, Mod.Annot] =
+    CodeFileGenerator.addScaladoc(
+      buildScaladoc(
+        endpoint.summary.getOrElse(""),
+        None,
+        obj.fields.map(field => field.scalaName -> field.description)
+      )
+    )
 
   // TODO: clean up (extract parts)
   private def generateApiClass(
@@ -61,14 +90,8 @@ trait APIGenerator {
              """
 
                 for {
-                  doc     <- CodeFileGenerator.addScaladoc(endpoint.summary.getOrElse(""))
-                  flatDoc <- CodeFileGenerator.addScaladoc(
-                               buildScaladoc(
-                                 endpoint.summary.getOrElse(""),
-                                 None,
-                                 obj.fields.map(field => field.scalaName -> field.description)
-                               )
-                             )
+                  doc     <- generateScaladoc(endpoint)
+                  flatDoc <- generateFlatScaladoc(endpoint, obj)
                 } yield List[Stat](
                   if (endpoint.isDeprecated)
                     base.copy(mods = doc :: Mod.Annot(init"deprecated()") :: base.mods)
@@ -79,7 +102,7 @@ trait APIGenerator {
                 )
               case None      =>
                 for {
-                  doc <- CodeFileGenerator.addScaladoc(endpoint.summary.getOrElse(""))
+                  doc <- generateScaladoc(endpoint)
                 } yield List(
                   if (endpoint.isDeprecated)
                     base.copy(mods = doc :: Mod.Annot(init"deprecated()") :: base.mods)
@@ -115,14 +138,8 @@ trait APIGenerator {
                """
 
                 for {
-                  doc     <- CodeFileGenerator.addScaladoc(endpoint.summary.getOrElse(""))
-                  flatDoc <- CodeFileGenerator.addScaladoc(
-                               buildScaladoc(
-                                 endpoint.summary.getOrElse(""),
-                                 None,
-                                 obj.fields.map(field => field.scalaName -> field.description)
-                               )
-                             )
+                  doc     <- generateScaladoc(endpoint)
+                  flatDoc <- generateFlatScaladoc(endpoint, obj)
                 } yield List(
                   if (endpoint.isDeprecated)
                     base.copy(mods = doc :: Mod.Annot(init"deprecated()") :: base.mods)
@@ -260,7 +277,7 @@ trait APIGenerator {
             """
 
           for {
-            doc   <- CodeFileGenerator.addScaladoc(endpoint.summary.getOrElse(""))
+            doc   <- generateScaladoc(endpoint)
             result = if (endpoint.isDeprecated)
                        base.copy(mods = doc :: Mod.Annot(init"deprecated()") :: base.mods)
                      else base.copy(mods = doc :: base.mods)
