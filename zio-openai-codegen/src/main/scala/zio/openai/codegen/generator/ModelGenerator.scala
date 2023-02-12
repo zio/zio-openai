@@ -102,8 +102,8 @@ trait ModelGenerator { this: HasParameters =>
             ${Types.schema_.term}[${Types.optional(fieldType).typ}],
             get0 = obj => obj.${field.scalaNameTerm},
             set0 = (obj: ${typ.typ}, v: ${Types
-          .optional(fieldType)
-          .typ}) => obj.copy(${field.scalaNameTerm} = v)
+            .optional(fieldType)
+            .typ}) => obj.copy(${field.scalaNameTerm} = v)
        )"""
       else
         q"""${Types.schemaField.term}(
@@ -118,8 +118,8 @@ trait ModelGenerator { this: HasParameters =>
          ${Types.typeId.term}.parse(${Lit.String(typ.asString)}),
          ..$fieldSchemas,
          (..$fieldsWithoutDefaults) => ${typ.termName}(..${obj.fields.map(field =>
-        field.scalaNameTerm
-      )})
+          field.scalaNameTerm
+        )})
        )"""
 
     for {
@@ -217,8 +217,8 @@ trait ModelGenerator { this: HasParameters =>
       caseClassDoc    <- CodeFileGenerator.addScaladoc(caseClassDocText)
     } yield List[Stat](
       q"""$caseClassDoc final case class ${typ.typName}(values: ${ScalaType
-        .map(ScalaType.string, Types.json)
-        .typ})
+          .map(ScalaType.string, Types.json)
+          .typ})
                     extends ${Types.dynamicObjectOf(typ).init} {
 
                 override protected def updateValues(updated: Map[String, Json]): ${typ.typ} =
@@ -232,9 +232,9 @@ trait ModelGenerator { this: HasParameters =>
             def apply(..$knownFieldParams): ${typ.typ} = {
               import _root_.zio.json._
               ${typ.termName}(List(..${obj.knownFields.map(field =>
-        q"${field.scalaNameTerm}.flatMap(value => value.toJsonAST.toOption.map(json => ${Lit
-          .String(field.name)} -> json)).toOption"
-      )}).flatten.toMap)
+          q"${field.scalaNameTerm}.flatMap(value => value.toJsonAST.toOption.map(json => ${Lit
+              .String(field.name)} -> json)).toOption"
+        )}).flatten.toMap)
             }
 
             $schema
@@ -322,8 +322,8 @@ trait ModelGenerator { this: HasParameters =>
                 $caseSetChain
               )
             implicit lazy val schema: ${Types
-        .schemaOf(typ)
-        .typ} = baseSchema.annotate(${Types.noDiscriminator.term}())
+          .schemaOf(typ)
+          .typ} = baseSchema.annotate(${Types.noDiscriminator.term}())
 
            ..$cases
           }
@@ -362,15 +362,15 @@ trait ModelGenerator { this: HasParameters =>
     val fromStringMatches =
       enum.values.map { value =>
         p"case ${Lit.String(value)} => ${Types.eitherRight.term}[${ScalaType.string.typ}, ${typ.typ}](${Term
-          .Name(value.capitalize)})"
+            .Name(value.capitalize)})"
       } :+ p"case other => ${Types.eitherLeft.term}[${ScalaType.string.typ}, ${typ.typ}](${Lit.String("Invalid value: ")} + other)"
     val fromString = q"(s: ${ScalaType.string.typ}) => s match { ..case $fromStringMatches }"
 
     val toStringMatches =
       enum.values.map { value =>
         p"case ${Term.Name(
-          value.capitalize
-        )} => ${Types.eitherRight.term}[${ScalaType.string.typ}, ${ScalaType.string.typ}](${Lit.String(value)})"
+            value.capitalize
+          )} => ${Types.eitherRight.term}[${ScalaType.string.typ}, ${ScalaType.string.typ}](${Lit.String(value)})"
       }
     val toString = q"(s: ${typ.typ}) => s match { ..case $toStringMatches }"
 
@@ -433,8 +433,8 @@ trait ModelGenerator { this: HasParameters =>
           q"""greaterThanOrEqualTo(${Lit.Double(min)}) && lessThanOrEqualTo(${Lit.Double(max)})"""
         case TypeDefinition.ConstrainedString(directName, parentName, min, max, _)  =>
           q"""hasLength(greaterThanOrEqualTo(${Lit.Int(min)}) && lessThanOrEqualTo(${Lit.Int(
-            max
-          )}))"""
+              max
+            )}))"""
       }
 
     val mods: List[Mod] =
