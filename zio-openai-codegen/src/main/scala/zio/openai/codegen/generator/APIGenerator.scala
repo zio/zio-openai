@@ -84,8 +84,8 @@ trait APIGenerator {
                 val fieldNames = obj.fields.map(_.scalaName).map(Term.Name(_))
                 val flat: Defn.Def =
                   q"""def ${endpoint.methodName}(..$fieldList): ${Types
-                    .zio(ScalaType.any, Types.openAIFailure, responseType)
-                    .typ} =
+                      .zio(ScalaType.any, Types.openAIFailure, responseType)
+                      .typ} =
                   ${endpoint.methodName}($cons(..$fieldNames))
              """
 
@@ -120,8 +120,8 @@ trait APIGenerator {
 
             val base =
               q"""def ${endpoint.methodName}(..$paramList): ${Types
-                .zio(svc, Types.openAIFailure, responseType)
-                .typ} =
+                  .zio(svc, Types.openAIFailure, responseType)
+                  .typ} =
               ${Types.zio_.term}.serviceWithZIO(_.${endpoint.methodName}(..$paramRefs))
          """
 
@@ -132,8 +132,8 @@ trait APIGenerator {
                 val fieldNames = obj.fields.map(_.scalaName).map(Term.Name(_))
                 val flat: Defn.Def =
                   q"""def ${endpoint.methodName}(..$fieldList): ${Types
-                    .zio(svc, Types.openAIFailure, responseType)
-                    .typ} =
+                      .zio(svc, Types.openAIFailure, responseType)
+                      .typ} =
                     ${endpoint.methodName}($cons(..$fieldNames))
                """
 
@@ -201,15 +201,15 @@ trait APIGenerator {
             if (hasOptionalQueryParams) {
               val optionalPairs = queryParameters.map { param =>
                 q"""${param.paramName}.map { value => (${Lit.String(
-                  param.name
-                )}, ${Types.encoders.term}.toURLSegment(value)) }"""
+                    param.name
+                  )}, ${Types.encoders.term}.toURLSegment(value)) }"""
               }
               q"""${Types.zhttpQueryParams.term}(List(..$optionalPairs).map(_.toOption).flatten.map { case (k, v) => (k, ${Types.chunk_.term}(v)) } : _*)"""
             } else {
               val pairs = queryParameters.map { param =>
                 q"""(${Lit.String(
-                  param.name
-                )}, ${Types.encoders.term}.toURLSegment(${param.paramName}))"""
+                    param.name
+                  )}, ${Types.encoders.term}.toURLSegment(${param.paramName}))"""
               }
               q"""${Types.zhttpQueryParams.term}(..$pairs)"""
             }
@@ -265,8 +265,8 @@ trait APIGenerator {
 
           val base =
             q"""def ${endpoint.methodName}(..$paramList): ${Types
-              .zio(ScalaType.any, Types.openAIFailure, responseType)
-              .typ} = {
+                .zio(ScalaType.any, Types.openAIFailure, responseType)
+                .typ} = {
                   $body.flatMap { body =>
                     val req = $request
                     client.request(req).mapError(${Types.openAIFailure.term}.Unknown(_)).flatMap { response =>
