@@ -1,15 +1,9 @@
 package zio.openai.examples
 
-import zio.{ Console, ZIOAppDefault }
 import zio.openai.Completions
-import zio.openai.model.CreateCompletionRequest.{
-  FrequencyPenalty,
-  MaxTokens,
-  PresencePenalty,
-  Prompt,
-  Stop
-}
-import zio.openai.model.{ Temperature, TopP }
+import zio.openai.model.CreateCompletionRequest.{ MaxTokens, Prompt, Stop }
+import zio.openai.model.{ FrequencyPenalty, PresencePenalty, Temperature, TopP }
+import zio.{ Console, ZIOAppDefault }
 
 /** Based on https://beta.openai.com/examples/default-explain-code
   */
