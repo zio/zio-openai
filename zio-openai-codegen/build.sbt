@@ -8,7 +8,7 @@ scalaVersion := "2.12.17"
 scalacOptions ++= Seq("-feature", "-deprecation")
 
 libraryDependencies ++= Seq(
-  "dev.zio"             %% "zio"              % "2.0.8",
+  "dev.zio"             %% "zio"              % "2.0.9",
   "dev.zio"             %% "zio-json"         % "0.4.2",
   "dev.zio"             %% "zio-nio"          % "2.0.1",
   "io.github.vigoo"     %% "metagen-core"     % "0.0.18",
