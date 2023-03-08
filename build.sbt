@@ -84,7 +84,7 @@ lazy val docs = project
     scalacOptions -= "-Xfatal-warnings",
     projectName                                := "ZIO OpenAI",
     mainModuleName                             := (zioOpenAI / moduleName).value,
-    projectStage                               := ProjectStage.Development,
+    projectStage                               := ProjectStage.ProductionReady,
     docsPublishBranch                          := "main",
     ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(zioOpenAI)
   )
