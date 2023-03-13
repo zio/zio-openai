@@ -3,7 +3,7 @@ import BuildHelper._
 inThisBuild(
   List(
     organization  := "dev.zio",
-    homepage      := Some(url("https://zio.dev/zio-flow/")),
+    homepage      := Some(url("https://zio.dev/zio-openai/")),
     licenses      := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
     developers    := List(
       Developer(
@@ -84,7 +84,7 @@ lazy val docs = project
     scalacOptions -= "-Xfatal-warnings",
     projectName                                := "ZIO OpenAI",
     mainModuleName                             := (zioOpenAI / moduleName).value,
-    projectStage                               := ProjectStage.Development,
+    projectStage                               := ProjectStage.ProductionReady,
     docsPublishBranch                          := "main",
     ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(zioOpenAI)
   )
