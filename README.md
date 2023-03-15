@@ -72,7 +72,7 @@ libraryDependencies += "dev.zio" %% "zio-openai" % "<version>"
 
 ## Documentation
 
-Learn more on the [ZIO OpenAI homepage](https://zio.dev/zio-flow/)!
+Learn more on the [ZIO OpenAI homepage](https://zio.dev/zio-openai/)!
 
 ## Contributing
 
