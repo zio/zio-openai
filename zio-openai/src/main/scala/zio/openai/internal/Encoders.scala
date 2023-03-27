@@ -3,7 +3,10 @@ package zio.openai.internal
 import zio.Chunk
 import zio.constraintless.{ IsElementOf, TypeList }
 import zio.http.Body
+import zio.http.forms.{ Form, FormData }
+import zio.http.model.MediaType
 import zio.openai.model.File
+import zio.prelude._
 import zio.schema.codec.BinaryCodecs
 import zio.schema.{ Schema, StandardType }
 
@@ -37,103 +40,102 @@ object Encoders {
     implicit lazy val encodeUnit: URLSegmentEncoder[Unit] = (_: Unit) => ""
   }
 
-  def toMultipartFormDataBody[T: Schema](value: T, boundary: String): Either[String, Body] = {
-    val buffer = new ByteArrayOutputStream()
-    val output = new DataOutputStream(buffer)
-    try {
-      toMultipartFormDataBody(Schema[T], value, boundary, Chunk.empty, output)
-      output.flush()
-      val bytes = Chunk.fromArray(buffer.toByteArray)
-      Right(Body.fromChunk(bytes))
-    } catch {
-      case NonFatal(err) =>
-        Left(err.getMessage)
+  def toMultipartFormDataBody[T: Schema](value: T, boundary: String): Either[String, Body] =
+    toMultipartFormDataBody(Schema[T], value, None).map { formData =>
+      // TODO: boundary cannot be passed to zio-http yet, fix it when possible
+      Body.fromMultipartForm(Form(formData))
     }
-  }
 
   private def toMultipartFormDataBody[T](
     schema: Schema[T],
     value: T,
-    boundary: String,
-    header: Chunk[Byte],
-    output: DataOutputStream
-  ): Unit = {
-    def writeString(s: String): Unit = {
-      output.write(header.toArray)
-      output.write(s.getBytes(StandardCharsets.UTF_8))
-    }
-
+    fieldName: Option[String]
+  ): Either[String, Chunk[FormData]] =
     schema match {
       case _ if schema == File.schema                    =>
-        output.write(header.toArray)
-        output.write(value.asInstanceOf[File].data.toArray)
+        val file = value.asInstanceOf[File]
+        Right(
+          Chunk(
+            FormData.binaryField(
+              fieldName.getOrElse("unknown"),
+              file.data,
+              MediaType.application.`octet-stream`,
+              transferEncoding = None,
+              Some(file.fileName)
+            )
+          )
+        )
       case _: Schema.Enum[_]                             =>
-        throw new IllegalArgumentException("Cannot encode enum as multipart/form-data")
+        Left("Cannot encode enum as multipart/form-data")
       case record: Schema.Record[_]                      =>
-        if (header.isEmpty) {
-          for ((field, idx) <- record.fields.zipWithIndex) {
-            val headerBuilder = new StringBuilder()
-            headerBuilder.append("--")
-            headerBuilder.append(boundary)
-            headerBuilder.append('\n')
-            headerBuilder.append("Content-Disposition: form-data; name=\"")
-            headerBuilder.append(field.name)
-            headerBuilder.append("\"")
-            if (field.schema == File.schema) {
-              headerBuilder.append(
-                s"""; filename="${field.get(value).asInstanceOf[File].fileName}""""
+        if (fieldName.isEmpty) {
+          record.fields
+            .forEach { field =>
+              toMultipartFormDataBody[Any](
+                field.schema.asInstanceOf[Schema[Any]],
+                field.get(value),
+                Some(field.name)
               )
             }
-            headerBuilder.append("\n\n")
-            val header = Chunk.fromArray(headerBuilder.toString().getBytes(StandardCharsets.UTF_8))
-
-            toMultipartFormDataBody(
-              field.schema.asInstanceOf[Schema[Any]],
-              field.get(value),
-              boundary,
-              header,
-              output
-            )
-            if (idx < (record.fields.length - 1))
-              output.write('\n')
-          }
-          writeString("--")
-          writeString(boundary)
-          writeString("--")
+            .map(_.flatten)
         } else {
-          throw new IllegalArgumentException("Cannot encode nested record as multipart/form-data")
+          Left("Cannot encode nested record as multipart/form-data")
         }
       case Schema.Sequence(elemSchema, _, toChunk, _, _) =>
         elemSchema.asInstanceOf[Schema[_]] match {
           case Schema.Primitive(StandardType.ByteType, _) =>
-            val data = toChunk(value).asInstanceOf[Chunk[Byte]]
-            output.write(header.toArray)
-            output.write(data.toArray)
+            Right(
+              Chunk(
+                FormData.binaryField(
+                  fieldName.getOrElse("unknown"),
+                  toChunk(value).asInstanceOf[Chunk[Byte]],
+                  MediaType.application.`octet-stream`
+                )
+              )
+            )
           case _                                          =>
-            throw new IllegalArgumentException("Cannot encode collections as multipart/form-data")
+            Left("Cannot encode collections as multipart/form-data")
         }
       case _: Schema.Collection[_, _]                    =>
-        throw new IllegalArgumentException("Cannot encode collections as multipart/form-data")
+        Left("Cannot encode collections as multipart/form-data")
       case Schema.Transform(schema, _, g, _, _)          =>
-        g(value).foreach { inner =>
-          toMultipartFormDataBody(schema, inner, boundary, header, output)
+        g(value).flatMap { inner =>
+          toMultipartFormDataBody(schema, inner, fieldName)
         }
       case Schema.Primitive(standardType, _)             =>
         standardType match {
-          case StandardType.UnitType   =>
+          case StandardType.UnitType   => Right(Chunk.empty)
           case StandardType.StringType =>
-            writeString(value.asInstanceOf[String])
+            Right(
+              Chunk(
+                FormData.simpleField(fieldName.getOrElse("unknown"), value.asInstanceOf[String])
+              )
+            )
           case StandardType.BoolType   =>
-            if (value.asInstanceOf[Boolean])
-              writeString("true")
-            else
-              writeString("false")
+            Right(
+              Chunk(
+                if (value.asInstanceOf[Boolean])
+                  FormData.simpleField(fieldName.getOrElse("unknown"), "true")
+                else
+                  FormData.simpleField(fieldName.getOrElse("unknown"), "true")
+              )
+            )
           case StandardType.BinaryType =>
-            val bytes = value.asInstanceOf[Chunk[Byte]]
-            output.write(header.toArray)
-            output.write(bytes.toArray)
+            Right(
+              Chunk(
+                FormData.binaryField(
+                  fieldName.getOrElse("unknown"),
+                  value.asInstanceOf[Chunk[Byte]],
+                  MediaType.application.`octet-stream`
+                )
+              )
+            )
           case _                       =>
-            writeString(value.toString)
+            Right(
+              Chunk(
+                FormData.simpleField(fieldName.getOrElse("unknown"), value.toString)
+              )
+            )
         }
       case Schema.Optional(inner, _)                     =>
         value.asInstanceOf[Option[Any]] match {
@@ -141,23 +143,21 @@ object Encoders {
             toMultipartFormDataBody[Any](
               inner.asInstanceOf[Schema[Any]],
               innerValue,
-              boundary,
-              header,
-              output
+              fieldName
             )
           case None             =>
+            Right(Chunk.empty)
         }
 
-      case Schema.Fail(message, annotations) =>
-        throw new IllegalStateException(message)
-      case Schema.Tuple2(_, _, _)            =>
-        throw new IllegalArgumentException("Cannot encode tuple as multipart/form-data")
-      case Schema.Either(_, _, _)            =>
-        throw new IllegalArgumentException("Cannot encode either as multipart/form-data")
-      case Schema.Lazy(schema0)              =>
-        toMultipartFormDataBody(schema0(), value, boundary, header, output)
-      case Schema.Dynamic(_)                 =>
-        throw new IllegalArgumentException("Cannot encode dynamic as multipart/form-data")
+      case Schema.Fail(message, _) =>
+        Left(message)
+      case Schema.Tuple2(_, _, _)  =>
+        Left("Cannot encode tuple as multipart/form-data")
+      case Schema.Either(_, _, _)  =>
+        Left("Cannot encode either as multipart/form-data")
+      case Schema.Lazy(schema0)    =>
+        toMultipartFormDataBody(schema0(), value, fieldName)
+      case Schema.Dynamic(_)       =>
+        Left("Cannot encode dynamic as multipart/form-data")
     }
-  }
 }
