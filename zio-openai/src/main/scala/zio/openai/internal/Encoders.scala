@@ -141,7 +141,7 @@ object Encoders {
         value.asInstanceOf[Option[Any]] match {
           case Some(innerValue) =>
             toMultipartFormDataBody[Any](
-              inner,
+              inner.asInstanceOf[Schema[Any]],
               innerValue,
               fieldName
             )
