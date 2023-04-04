@@ -79,9 +79,13 @@ trait APIGenerator {
             endpoint.hasSingleBodyParameter(model) match {
               case Some(obj) =>
                 val cons = endpoint.body.get.typ.scalaType(model).term
-                val fieldList =
-                  getObjectFieldsAsParams(model, obj.fields, allowDefaults = true)
-                val fieldNames = obj.fields.map(_.scalaName).map(Term.Name(_))
+                val fieldList = getObjectFieldsAsParams(
+                  model,
+                  obj.fields,
+                  allowDefaults = true,
+                  filterStreamingControl = true
+                )
+                val fieldNames = getObjectFieldNames(obj, replaceStreamingWith = Some(false))
                 val flat: Defn.Def =
                   q"""def ${endpoint.methodName}(..$fieldList): ${Types
                       .zio(ScalaType.any, Types.openAIFailure, responseType)
@@ -90,8 +94,24 @@ trait APIGenerator {
              """
 
                 for {
-                  doc     <- generateScaladoc(endpoint)
-                  flatDoc <- generateFlatScaladoc(endpoint, obj)
+                  doc                     <- generateScaladoc(endpoint)
+                  flatDoc                 <- generateFlatScaladoc(endpoint, obj)
+                  optionalStreamingMethods =
+                    if (endpoint.hasStreamingOverride(model)) {
+                      val streaming =
+                        q"""def ${endpoint.methodNameStreaming}(..$fieldList): ${Types
+                            .zstream(ScalaType.any, Types.openAIFailure, responseType)
+                            .typ}"""
+                      List(
+                        if (endpoint.isDeprecated)
+                          streaming
+                            .copy(mods = doc :: Mod.Annot(init"deprecated()") :: streaming.mods)
+                        else
+                          streaming
+                      )
+                    } else {
+                      List.empty
+                    }
                 } yield List[Stat](
                   if (endpoint.isDeprecated)
                     base.copy(mods = doc :: Mod.Annot(init"deprecated()") :: base.mods)
@@ -99,7 +119,7 @@ trait APIGenerator {
                   if (endpoint.isDeprecated)
                     flat.copy(mods = flatDoc :: Mod.Annot(init"deprecated()") :: flat.mods)
                   else flat.copy(mods = flatDoc :: flat.mods)
-                )
+                ) ++ optionalStreamingMethods
               case None      =>
                 for {
                   doc <- generateScaladoc(endpoint)
@@ -128,8 +148,13 @@ trait APIGenerator {
             endpoint.hasSingleBodyParameter(model) match {
               case Some(obj) =>
                 val cons = endpoint.body.get.typ.scalaType(model).term
-                val fieldList = getObjectFieldsAsParams(model, obj.fields, allowDefaults = true)
-                val fieldNames = obj.fields.map(_.scalaName).map(Term.Name(_))
+                val fieldList = getObjectFieldsAsParams(
+                  model,
+                  obj.fields,
+                  allowDefaults = true,
+                  filterStreamingControl = true
+                )
+                val fieldNames = getObjectFieldNames(obj, replaceStreamingWith = Some(false))
                 val flat: Defn.Def =
                   q"""def ${endpoint.methodName}(..$fieldList): ${Types
                       .zio(svc, Types.openAIFailure, responseType)
@@ -138,8 +163,27 @@ trait APIGenerator {
                """
 
                 for {
-                  doc     <- generateScaladoc(endpoint)
-                  flatDoc <- generateFlatScaladoc(endpoint, obj)
+                  doc                     <- generateScaladoc(endpoint)
+                  flatDoc                 <- generateFlatScaladoc(endpoint, obj)
+                  optionalStreamingMethods =
+                    if (endpoint.hasStreamingOverride(model)) {
+                      val fieldNames = fieldList.map(p => Term.Name(p.name.value))
+                      val streaming =
+                        q"""def ${endpoint.methodNameStreaming}(..$fieldList): ${Types
+                            .zstream(svc, Types.openAIFailure, responseType)
+                            .typ} =
+                              ${Types.zstream_.term}.serviceWithStream(_.${endpoint.methodNameStreaming}(..$fieldNames))
+                         """
+                      List(
+                        if (endpoint.isDeprecated)
+                          streaming
+                            .copy(mods = doc :: Mod.Annot(init"deprecated()") :: streaming.mods)
+                        else
+                          streaming
+                      )
+                    } else {
+                      List.empty
+                    }
                 } yield List(
                   if (endpoint.isDeprecated)
                     base.copy(mods = doc :: Mod.Annot(init"deprecated()") :: base.mods)
@@ -147,7 +191,7 @@ trait APIGenerator {
                   if (endpoint.isDeprecated)
                     flat.copy(mods = flatDoc :: Mod.Annot(init"deprecated()") :: flat.mods)
                   else flat.copy(mods = flatDoc :: flat.mods)
-                )
+                ) ++ optionalStreamingMethods
 
               case None =>
                 for {

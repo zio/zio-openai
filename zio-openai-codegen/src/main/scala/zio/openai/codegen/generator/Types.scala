@@ -48,6 +48,10 @@ object Types {
     ScalaType(Packages.zio, "ZLayer", in, e, out)
   val zlayer_ : ScalaType = ScalaType(Packages.zio, "ZLayer")
 
+  def zstream(r: ScalaType, e: ScalaType, a: ScalaType): ScalaType =
+    ScalaType(Packages.zioStream, "ZStream", r, e, a)
+  val zstream_ : ScalaType = ScalaType(Packages.zioStream, "ZStream")
+
   val typeListCons = ScalaType(Packages.zioConstraintless / "TypeList", "::")
   val typeListEnd = ScalaType(Packages.zioConstraintless / "TypeList", "End")
 

@@ -53,19 +53,36 @@ trait ModelGenerator { this: HasParameters =>
     )
   }
 
-  protected def getObjectFieldsAsParams(model: Model, fields: List[Field], allowDefaults: Boolean) =
-    fields.map { field =>
-      val fieldType = field.typ.scalaType(model)
-      val fieldName = field.scalaNameTerm
+  protected def getObjectFieldsAsParams(
+    model: Model,
+    fields: List[Field],
+    allowDefaults: Boolean,
+    filterStreamingControl: Boolean
+  ) =
+    fields
+      .filter(!_.controlsStreamingResponse || !filterStreamingControl)
+      .map { field =>
+        val fieldType = field.typ.scalaType(model)
+        val fieldName = field.scalaNameTerm
 
-      if (field.isNullable || !field.isRequired) {
-        val p = param"$fieldName: ${Types.optional(fieldType).typ}"
-        if (!field.isRequired && allowDefaults)
-          param"$fieldName: ${Types.optional(fieldType).typ} = ${Types.optionalAbsent.term}"
-        else
-          param"$fieldName: ${Types.optional(fieldType).typ}"
-      } else
-        param"$fieldName: ${fieldType.typ}"
+        if (field.isNullable || !field.isRequired) {
+          val p = param"$fieldName: ${Types.optional(fieldType).typ}"
+          if (!field.isRequired && allowDefaults)
+            param"$fieldName: ${Types.optional(fieldType).typ} = ${Types.optionalAbsent.term}"
+          else
+            param"$fieldName: ${Types.optional(fieldType).typ}"
+        } else
+          param"$fieldName: ${fieldType.typ}"
+      }
+
+  protected def getObjectFieldNames(
+    obj: TypeDefinition.Object,
+    replaceStreamingWith: Option[Boolean]
+  ): List[Term] =
+    obj.fields.map { field =>
+      if (replaceStreamingWith.isDefined && field.controlsStreamingResponse)
+        Lit.Boolean(replaceStreamingWith.getOrElse(false))
+      else Term.Name(field.scalaName)
     }
 
   private def generateTopLevelObjectClass(
@@ -88,8 +105,18 @@ trait ModelGenerator { this: HasParameters =>
 
     val typ = obj.scalaType(model)
 
-    val fields = getObjectFieldsAsParams(model, obj.fields, allowDefaults = true)
-    val fieldsWithoutDefaults = getObjectFieldsAsParams(model, obj.fields, allowDefaults = false)
+    val fields = getObjectFieldsAsParams(
+      model,
+      obj.fields,
+      allowDefaults = true,
+      filterStreamingControl = false
+    )
+    val fieldsWithoutDefaults = getObjectFieldsAsParams(
+      model,
+      obj.fields,
+      allowDefaults = false,
+      filterStreamingControl = false
+    )
 
     val caseClassName = ScalaType(Packages.zioSchema / "Schema", s"CaseClass${fields.size}")
 
@@ -176,7 +203,12 @@ trait ModelGenerator { this: HasParameters =>
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, List[Stat]] = {
     val typ = obj.scalaType(model)
 
-    val knownFieldParams = getObjectFieldsAsParams(model, obj.knownFields, allowDefaults = true)
+    val knownFieldParams = getObjectFieldsAsParams(
+      model,
+      obj.knownFields,
+      allowDefaults = true,
+      filterStreamingControl = false
+    )
     val knownFieldGetters =
       obj.knownFields.map { field =>
         val fieldType = field.typ.scalaType(model)

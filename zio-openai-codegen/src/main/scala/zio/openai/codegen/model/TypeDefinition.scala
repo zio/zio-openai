@@ -309,7 +309,8 @@ object TypeDefinition {
                       TypeDefinition.from(parents / directName, fieldName, fieldSchema),
                       isRequiredOverride(directName, fieldName).getOrElse(reqd.contains(fieldName)),
                       Option(fieldSchema.getNullable).exists(_.booleanValue()),
-                      Option(fieldSchema.getDescription)
+                      Option(fieldSchema.getDescription),
+                      controlsStreamingResponse = isStreamingOverride(directName, fieldName)
                     )
                   }.toList
                 )
@@ -402,16 +403,38 @@ object TypeDefinition {
   private def getKnownFieldsFor(name: String, parents: ParentChain): List[Field] =
     if (name == "hyperparams" && parents.items == Chunk("FineTune")) {
       List(
-        Field("batch_size", PrimitiveInteger, isRequired = false, isNullable = false, None),
+        Field(
+          "batch_size",
+          PrimitiveInteger,
+          isRequired = false,
+          isNullable = false,
+          None,
+          controlsStreamingResponse = false
+        ),
         Field(
           "learning_rate_multiplier",
           PrimitiveNumber,
           isRequired = false,
           isNullable = false,
-          None
+          None,
+          controlsStreamingResponse = false
         ),
-        Field("n_epochs", PrimitiveInteger, isRequired = false, isNullable = false, None),
-        Field("prompt_loss_weight", PrimitiveNumber, isRequired = false, isNullable = false, None)
+        Field(
+          "n_epochs",
+          PrimitiveInteger,
+          isRequired = false,
+          isNullable = false,
+          None,
+          controlsStreamingResponse = false
+        ),
+        Field(
+          "prompt_loss_weight",
+          PrimitiveNumber,
+          isRequired = false,
+          isNullable = false,
+          None,
+          controlsStreamingResponse = false
+        )
       )
     } else {
       List.empty
@@ -426,4 +449,8 @@ object TypeDefinition {
     } else {
       None
     }
+
+  // TODO: make this configurable
+  private def isStreamingOverride(objName: String, fieldName: String): Boolean =
+    fieldName == "stream"
 }

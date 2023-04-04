@@ -16,6 +16,7 @@ final case class Endpoint(
   summary: Option[String]
 ) {
   def methodName: Term.Name = Term.Name(name)
+  def methodNameStreaming: Term.Name = Term.Name(name + "Streaming")
 
   def pathParameters: List[Parameter.PathParameter] =
     parameters.collect { case pp: PathParameter =>
@@ -49,6 +50,11 @@ final case class Endpoint(
           }
         case _                                          => None
       }
+
+  def hasStreamingOverride(model: Model): Boolean =
+    hasSingleBodyParameter(model).exists { obj =>
+      obj.fields.exists(_.controlsStreamingResponse)
+    }
 
   def transform(f: TypeDefinition => TypeDefinition): Endpoint =
     copy(
