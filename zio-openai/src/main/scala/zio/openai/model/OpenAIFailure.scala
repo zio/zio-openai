@@ -1,8 +1,6 @@
 package zio.openai.model
 
-import zio.Chunk
-import zio.http.URL
-import zio.http.model.{ Method, Status }
+import zio.http.{ Method, Status, URL }
 import zio.schema.codec.DecodeError
 
 sealed trait OpenAIFailure
