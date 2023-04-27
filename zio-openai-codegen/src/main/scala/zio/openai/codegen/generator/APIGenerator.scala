@@ -216,9 +216,9 @@ trait APIGenerator {
 
           val url =
             if (hasQueryParams)
-              q"""baseURL.setPath(baseURL.path ++ $path).setQueryParams($queryParams)"""
+              q"""baseURL.withPath(baseURL.path ++ $path).withQueryParams($queryParams)"""
             else
-              q"""baseURL.setPath(baseURL.path ++ $path)"""
+              q"""baseURL.withPath(baseURL.path ++ $path)"""
 
           val body =
             endpoint.body match {
@@ -236,17 +236,17 @@ trait APIGenerator {
 
           val contentType =
             if (endpoint.body.exists(_.contentType == ContentType.`multipart/form-data`))
-              q"""${Lit.String(endpoint.bodyContentTypeAsString)}+"; boundary="+this.boundary"""
+              q"""${Types.zhttpHeader.term}.ContentType(${endpoint.bodyContentTypeAsMediaType}, boundary = Some(this.boundary))"""
             else
-              Lit.String(endpoint.bodyContentTypeAsString)
+              q"""${Types.zhttpHeader.term}.ContentType(${endpoint.bodyContentTypeAsMediaType})"""
 
           val request =
             q"""${Types.zhttpRequest.term}.default(
                method = ${endpoint.method.constructor.term},
                url = $url,
                body = body
-             ).addHeader(${Types.zhttpHeaderNames.term}.authorization, authHeaderValue)
-              .addHeader(${Types.zhttpHeaderNames.term}.contentType, $contentType)
+             ).addHeader(authHeader)
+              .addHeader($contentType)
              """
 
           val mapResponse =
@@ -307,8 +307,8 @@ trait APIGenerator {
           """
 
       liveClass =
-        q"""class Live(client: ${Types.zhttpClient.typ}, baseURL: ${Types.zhttpURL.typ}, apiKey: ${Types.secret.typ}, boundary: String) extends ${svc.init} {
-              private val authHeaderValue = "Bearer " + apiKey.value.mkString
+        q"""class Live(client: ${Types.zhttpClient.typ}, baseURL: ${Types.zhttpURL.typ}, apiKey: ${Types.secret.typ}, boundary: ${Types.zhttpBoundary.typ}) extends ${svc.init} {
+              private val authHeader = ${Types.zhttpHeader.term}.Authorization.Bearer(apiKey.value.mkString)
 
               $codecs
 
@@ -333,7 +333,7 @@ trait APIGenerator {
               for {
                 client <- ${Types.zio_.term}.service[${Types.zhttpClient.typ}]
                 config <- ${Types.zio_.term}.config(${Types.openAIConfig.term}.config).orDie
-                boundary <- ${Types.random.term}.nextUUID.map(uuid => "------" + uuid.toString.replace("-", ""))
+                boundary <- ${Types.zhttpBoundary.term}.randomUUID
               } yield new Live(client, config.baseURL, config.apiKey, boundary)
             }
          """

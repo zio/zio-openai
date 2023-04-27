@@ -2,7 +2,7 @@ package zio.openai.internal
 
 import zio.ZIO
 import zio.constraintless.{ IsElementOf, TypeList }
-import zio.http.model.Status
+import zio.http.Status
 import zio.http.{ Request, Response }
 import zio.openai.model.{ ErrorResponse, OpenAIFailure }
 import zio.schema.codec.BinaryCodecs

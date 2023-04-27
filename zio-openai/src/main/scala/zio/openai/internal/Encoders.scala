@@ -2,17 +2,11 @@ package zio.openai.internal
 
 import zio.Chunk
 import zio.constraintless.{ IsElementOf, TypeList }
-import zio.http.Body
-import zio.http.forms.{ Form, FormData }
-import zio.http.model.MediaType
+import zio.http.{ Body, Boundary, Form, FormField, MediaType }
 import zio.openai.model.File
 import zio.prelude._
 import zio.schema.codec.BinaryCodecs
 import zio.schema.{ Schema, StandardType }
-
-import java.io.{ ByteArrayOutputStream, DataOutputStream }
-import java.nio.charset.StandardCharsets
-import scala.util.control.NonFatal
 
 object Encoders {
   def toJsonBody[T]: ToJsonBody[T] = new ToJsonBody[T](())
@@ -40,23 +34,22 @@ object Encoders {
     implicit lazy val encodeUnit: URLSegmentEncoder[Unit] = (_: Unit) => ""
   }
 
-  def toMultipartFormDataBody[T: Schema](value: T, boundary: String): Either[String, Body] =
+  def toMultipartFormDataBody[T: Schema](value: T, boundary: Boundary): Either[String, Body] =
     toMultipartFormDataBody(Schema[T], value, None).map { formData =>
-      // TODO: boundary cannot be passed to zio-http yet, fix it when possible
-      Body.fromMultipartForm(Form(formData))
+      Body.fromMultipartForm(Form(formData), boundary)
     }
 
   private def toMultipartFormDataBody[T](
     schema: Schema[T],
     value: T,
     fieldName: Option[String]
-  ): Either[String, Chunk[FormData]] =
+  ): Either[String, Chunk[FormField]] =
     schema match {
       case _ if schema == File.schema                    =>
         val file = value.asInstanceOf[File]
         Right(
           Chunk(
-            FormData.binaryField(
+            FormField.binaryField(
               fieldName.getOrElse("unknown"),
               file.data,
               MediaType.application.`octet-stream`,
@@ -86,7 +79,7 @@ object Encoders {
           case Schema.Primitive(StandardType.ByteType, _) =>
             Right(
               Chunk(
-                FormData.binaryField(
+                FormField.binaryField(
                   fieldName.getOrElse("unknown"),
                   toChunk(value).asInstanceOf[Chunk[Byte]],
                   MediaType.application.`octet-stream`
@@ -108,22 +101,22 @@ object Encoders {
           case StandardType.StringType =>
             Right(
               Chunk(
-                FormData.simpleField(fieldName.getOrElse("unknown"), value.asInstanceOf[String])
+                FormField.simpleField(fieldName.getOrElse("unknown"), value.asInstanceOf[String])
               )
             )
           case StandardType.BoolType   =>
             Right(
               Chunk(
                 if (value.asInstanceOf[Boolean])
-                  FormData.simpleField(fieldName.getOrElse("unknown"), "true")
+                  FormField.simpleField(fieldName.getOrElse("unknown"), "true")
                 else
-                  FormData.simpleField(fieldName.getOrElse("unknown"), "true")
+                  FormField.simpleField(fieldName.getOrElse("unknown"), "true")
               )
             )
           case StandardType.BinaryType =>
             Right(
               Chunk(
-                FormData.binaryField(
+                FormField.binaryField(
                   fieldName.getOrElse("unknown"),
                   value.asInstanceOf[Chunk[Byte]],
                   MediaType.application.`octet-stream`
@@ -133,7 +126,7 @@ object Encoders {
           case _                       =>
             Right(
               Chunk(
-                FormData.simpleField(fieldName.getOrElse("unknown"), value.toString)
+                FormField.simpleField(fieldName.getOrElse("unknown"), value.toString)
               )
             )
         }
