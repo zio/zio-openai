@@ -3,7 +3,7 @@ sbtPlugin := true
 organization := "dev.zio"
 name         := "zio-openai-codegen"
 
-scalaVersion := "2.12.17"
+scalaVersion := "2.12.18"
 
 scalacOptions ++= Seq("-feature", "-deprecation")
 
