@@ -18,7 +18,7 @@ addSbtPlugin("pl.project13.scala"                % "sbt-jmh"                    
 addSbtPlugin("com.timushev.sbt"                  % "sbt-updates"                   % "0.6.4")
 addSbtPlugin("dev.zio"                           % "zio-sbt-website"               % "0.3.10")
 
-libraryDependencies += "org.snakeyaml" % "snakeyaml-engine" % "2.6"
+libraryDependencies += "org.snakeyaml" % "snakeyaml-engine" % "2.7"
 
 lazy val codegen = project
   .in(file("."))
