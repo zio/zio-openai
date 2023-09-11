@@ -5,5 +5,5 @@ object Dependencies {
   val zioJson = "0.5.0"
   val zioNio = "2.0.1"
   val zioPrelude = "1.0.0-RC19"
-  val zioSchema = "0.4.12"
+  val zioSchema = "0.4.14"
 }
