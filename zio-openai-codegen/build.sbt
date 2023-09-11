@@ -9,7 +9,7 @@ scalacOptions ++= Seq("-feature", "-deprecation")
 
 libraryDependencies ++= Seq(
   "dev.zio"             %% "zio"              % "2.0.13",
-  "dev.zio"             %% "zio-json"         % "0.5.0",
+  "dev.zio"             %% "zio-json"         % "0.6.2",
   "dev.zio"             %% "zio-nio"          % "2.0.1",
   "io.github.vigoo"     %% "metagen-core"     % "0.0.18",
   "io.swagger.parser.v3" % "swagger-parser"   % "2.1.11",
