@@ -32,9 +32,11 @@ object Types {
   val json: ScalaType = ScalaType(Packages.zioJsonAst, "Json")
 
   val zhttpBody: ScalaType = ScalaType(Packages.zioHttp, "Body")
+  val zhttpBoundary: ScalaType = ScalaType(Packages.zioHttp, "Boundary")
   val zhttpClient: ScalaType = ScalaType(Packages.zioHttp, "Client")
-  val zhttpHeaderNames: ScalaType = ScalaType(Packages.zioHttpModel, "HeaderNames")
-  val zhttpMethod: ScalaType = ScalaType(Packages.zioHttpModel, "Method")
+  val zhttpHeader: ScalaType = ScalaType(Packages.zioHttp, "Header")
+  val zhttpMediaType: ScalaType = ScalaType(Packages.zioHttp, "MediaType")
+  val zhttpMethod: ScalaType = ScalaType(Packages.zioHttp, "Method")
   val zhttpPath: ScalaType = ScalaType(Packages.zioHttp, "Path")
   val zhttpRequest: ScalaType = ScalaType(Packages.zioHttp, "Request")
   val zhttpURL: ScalaType = ScalaType(Packages.zioHttp, "URL")

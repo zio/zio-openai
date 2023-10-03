@@ -1,9 +1,10 @@
 package zio.openai.codegen.model
 
 import io.github.vigoo.metagen.core.ScalaType
+import zio.openai.codegen.generator.Types
 import zio.openai.codegen.model.Parameter.{ PathParameter, QueryParameter }
 
-import scala.meta.Term
+import scala.meta._
 
 final case class Endpoint(
   name: String,
@@ -37,6 +38,12 @@ final case class Endpoint(
     body match {
       case Some(RequestBody(contentType, _)) => contentType.asString
       case None                              => ContentType.`application/json`.asString
+    }
+
+  def bodyContentTypeAsMediaType =
+    body match {
+      case Some(RequestBody(contentType, _)) => contentType.asMediaType
+      case None                              => q"${Types.zhttpMediaType.term}.application.json"
     }
 
   def hasSingleBodyParameter(model: Model): Option[TypeDefinition.Object] =

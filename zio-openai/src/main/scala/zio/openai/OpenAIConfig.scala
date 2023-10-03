@@ -14,7 +14,7 @@ object OpenAIConfig {
       Config.secret("apiKey"))
       .mapOrFail { case (uri, apiKey) =>
         URL
-          .fromString(uri.toString)
+          .decode(uri.toString)
           .map { baseURL =>
             OpenAIConfig(baseURL, apiKey)
           }
