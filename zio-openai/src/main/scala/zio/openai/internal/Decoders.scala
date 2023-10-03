@@ -1,11 +1,11 @@
 package zio.openai.internal
 
 import zio.ZIO
-import zio.constraintless.{ IsElementOf, TypeList }
+import zio.constraintless.{IsElementOf, TypeList}
 import zio.http.Status
-import zio.http.{ Request, Response }
-import zio.openai.model.{ ErrorResponse, OpenAIFailure }
-import zio.schema.codec.BinaryCodecs
+import zio.http.{Request, Response}
+import zio.openai.model.{ErrorResponse, OpenAIFailure}
+import zio.schema.codec.{BinaryCodecs, JsonCodec}
 
 import java.nio.charset.StandardCharsets
 
@@ -38,6 +38,8 @@ private[openai] object Decoders {
       }
   }
 
+  private val errorResponseCodec = JsonCodec.schemaBasedBinaryCodec(ErrorResponse.schema)
+
   private def failWithErrorResponse(
     request: Request,
     response: Response
@@ -46,7 +48,7 @@ private[openai] object Decoders {
       .mapError(OpenAIFailure.Unknown(_))
       .flatMap { body =>
         ZIO
-          .fromEither(ErrorResponse.jsonCodec.decode(body))
+          .fromEither(errorResponseCodec.decode(body))
           .catchAll { msg =>
             val unknownError = new String(body.toArray, StandardCharsets.UTF_8)
             ZIO.fail(

@@ -342,6 +342,22 @@ trait ModelGenerator { this: HasParameters =>
       Nil
     )
     for {
+      children       <-
+        ZIO
+          .foreach(alt.children(model)) {
+            case child: TypeDefinition.Object        =>
+              generateObjectClass(model, child)
+            case child: TypeDefinition.Alternatives  =>
+              generateAlternativesTrait(model, child)
+            case child: TypeDefinition.Enum          =>
+              generateEnumTrait(model, child)
+            case child: TypeDefinition.DynamicObject =>
+              generateDynamicObjectClass(model, child)
+            case child: TypeDefinition.SmartNewType  =>
+              generateSmartNewType(model, child)
+            case _                                   =>
+              ZIO.fail(OpenAIGeneratorFailure.UnsupportedChildType)
+          }
       sealedTraitDoc <- CodeFileGenerator.addScaladoc(sealedTraitDocText)
     } yield List[Stat](
       q"""$sealedTraitDoc sealed trait ${typ.typName}""",
@@ -358,6 +374,7 @@ trait ModelGenerator { this: HasParameters =>
           .typ} = baseSchema.annotate(${Types.noDiscriminator.term}())
 
            ..$cases
+           ..${children.flatten}
           }
          """
     )

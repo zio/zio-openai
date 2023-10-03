@@ -63,6 +63,7 @@ trait APIGenerator {
     model: Model,
     api: API
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] = {
+    println(s"Generating API class for '${api.name}'")
     val svc = ScalaType(Packages.openai, api.name)
 
     val isSvcDeprecated = api.endpoints.forall(_.isDeprecated)

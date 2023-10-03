@@ -64,7 +64,17 @@ final case class Model(
       (List.empty[TypeDefinition.Enum], Map.empty[TypeDefinition.Enum, TypeDefinition.Enum])
     ) { case ((result, mapping), enum) =>
       val group = grouped((enum.directName, enum.values))
-      if (group.size == 1) {
+      if (
+        group.size == 1 ||
+        enum.directName == "CaseType0" || // We don't want to move these generated cases into top level
+        enum.directName == "CaseType1" ||
+        enum.directName == "CaseType2" ||
+        enum.directName == "CaseType3" ||
+        enum.directName == "CaseType4" ||
+        enum.directName == "CaseType5" ||
+        enum.directName == "CaseType6" ||
+        enum.directName == "CaseType7"
+      ) {
         // This is a unique enum
         (enum :: result, mapping + (enum -> enum))
       } else {
@@ -114,6 +124,14 @@ final case class Model(
       }
     }
   }
+
+  def resolve(typ: TypeDefinition): TypeDefinition =
+    typ match {
+      case ref @ TypeDefinition.Ref(_) =>
+        finalTypes(ref.referencedName)
+      case other                       =>
+        other
+    }
 }
 
 object Model {
@@ -140,6 +158,8 @@ object Model {
         Map(arr.name -> arr) ++ collectReferencedTypes(Seq(itemType))
       case arr @ TypeDefinition.ConstrainedArray(itemType, _, _)    =>
         Map(arr.name -> arr) ++ collectReferencedTypes(Seq(itemType))
+      case TypeDefinition.Ref(_)                                    =>
+        Map.empty[String, TypeDefinition]
       case typ: TypeDefinition                                      =>
         Map(typ.name -> typ)
     }.toMap

@@ -223,14 +223,23 @@ object TypeDefinition {
 
     lazy val caseNames: List[String] = {
       lazy val default = alternatives.indices.map(idx => s"Case$idx").toList
-      val typeNameBased = alternatives.map { typ =>
-        typ.verboseName
-      }.distinct
 
-      if (typeNameBased.size == alternatives.size) {
-        typeNameBased
-      } else {
+      if (
+        alternatives.collectFirst { case np: NonPrimitive =>
+          np
+        }.nonEmpty
+      ) {
         default
+      } else {
+        val typeNameBased = alternatives.map { typ =>
+          typ.verboseName
+        }.distinct
+
+        if (typeNameBased.size == alternatives.size) {
+          typeNameBased
+        } else {
+          default
+        }
       }
     }
 
@@ -238,7 +247,7 @@ object TypeDefinition {
       val typ = scalaType(model)
 
       alternatives.zip(caseNames).map { case (alt, caseName) =>
-        typ / caseName -> alt
+        typ / caseName -> model.resolve(alt)
       }
     }
   }
@@ -248,12 +257,15 @@ object TypeDefinition {
     parentName: Option[String],
     values: List[String],
     description: Option[String]
-  ) extends TypeDefinition with NonPrimitive
+  ) extends TypeDefinition with NonPrimitive {
+    override def verboseName: String = directName.capitalize
+  }
 
   final case class Ref(name: String) extends TypeDefinition {
     override val description: Option[String] = None
 
     val referencedName: String = name.stripPrefix("#/components/schemas/")
+    override val verboseName: String = referencedName.capitalize
 
     override def scalaType(model: Model): ScalaType =
       model.types(referencedName).scalaType(model)
@@ -281,7 +293,7 @@ object TypeDefinition {
             directName,
             parents.name,
             alternatives = oneOf.zipWithIndex.map { case (schema, idx) =>
-              TypeDefinition.from(parents / directName, "case" + idx, schema)
+              TypeDefinition.from(parents / directName, "CaseType" + idx, schema)
             }.toList,
             Option(schema.getDescription)
           )
