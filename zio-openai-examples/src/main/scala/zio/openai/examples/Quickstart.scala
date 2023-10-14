@@ -1,8 +1,9 @@
 package zio.openai.examples
 
-import zio.{ Console, ZIO, ZIOAppDefault }
+import zio.json.ast.Json
+import zio.{Console, ZIO, ZIOAppDefault}
 import zio.openai._
-import zio.openai.model.CreateCompletionRequest.Prompt
+import zio.openai.model.CreateCompletionRequest.{Model, Prompt}
 import zio.openai.model.Temperature
 
 /** Based on https://beta.openai.com/docs/quickstart/build-your-application
@@ -25,11 +26,11 @@ object Quickstart extends ZIOAppDefault {
     for {
       animal <- Console.readLine("Animal: ")
       result <- Completions.createCompletion(
-                  model = "text-davinci-003",
+                  model = Model(Map("text-davinci-003" -> Json.Null)),
                   prompt = generatePrompt(animal),
                   temperature = Temperature(0.6)
                 )
-      _      <- Console.printLine("Names: " + result.choices.flatMap(_.text.toOption).mkString(", "))
+      _      <- Console.printLine("Names: " + result.choices.map(_.text).mkString(", "))
     } yield ()
 
   override def run =

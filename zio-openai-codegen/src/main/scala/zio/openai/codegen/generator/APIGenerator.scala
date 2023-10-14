@@ -100,16 +100,28 @@ trait APIGenerator {
                   optionalStreamingMethods =
                     if (endpoint.hasStreamingOverride(model)) {
                       val streaming =
-                        q"""def ${endpoint.methodNameStreaming}(..$fieldList): ${Types
+                        q"""def ${endpoint.methodNameStreaming}(..$paramList): ${Types
                             .zstream(ScalaType.any, Types.openAIFailure, responseType)
                             .typ}"""
+                      val flatStreaming =
+                        q"""def ${endpoint.methodNameStreaming}(..$fieldList): ${
+                          Types
+                            .zstream(ScalaType.any, Types.openAIFailure, responseType)
+                            .typ} =
+                              ${endpoint.methodNameStreaming}($cons(..$fieldNames))
+                         """
                       List(
                         if (endpoint.isDeprecated)
                           streaming
                             .copy(mods = doc :: Mod.Annot(init"deprecated()") :: streaming.mods)
                         else
-                          streaming
-                      )
+                          streaming,
+                        if (endpoint.isDeprecated)
+                          flatStreaming
+                            .copy(mods = doc :: Mod.Annot(init"deprecated()") :: flatStreaming.mods)
+                        else
+                          flatStreaming
+                        )
                     } else {
                       List.empty
                     }
@@ -207,86 +219,87 @@ trait APIGenerator {
           .map(_.flatten)
 
       implMethods <-
-        ZIO.foreach(api.endpoints) { endpoint =>
-          val paramList = getParamList(model, endpoint)
-          val responseType = endpoint.responseType(model)
+        ZIO
+          .foreach(api.endpoints) { endpoint =>
+            val paramList = getParamList(model, endpoint)
+            val responseType = endpoint.responseType(model)
 
-          val queryParameters = endpoint.queryParameters
-          val pathParameters = endpoint.pathParameters
+            val queryParameters = endpoint.queryParameters
+            val pathParameters = endpoint.pathParameters
 
-          val basePathString = Lit.String(endpoint.pathPattern)
-          val pathString =
-            if (pathParameters.isEmpty)
-              basePathString
-            else
-              pathParameters.foldLeft[Term](basePathString) { case (str, param) =>
-                val litParamName = Lit.String("{" + param.name + "}")
-                if (param.isRequired) {
-                  q"""
+            val basePathString = Lit.String(endpoint.pathPattern)
+            val pathString =
+              if (pathParameters.isEmpty)
+                basePathString
+              else
+                pathParameters.foldLeft[Term](basePathString) { case (str, param) =>
+                  val litParamName = Lit.String("{" + param.name + "}")
+                  if (param.isRequired) {
+                    q"""
                     $str.replace(
                       $litParamName,
                       ${Types.encoders.term}.toURLSegment(${param.paramName})
                     )
                    """
-                } else {
-                  q"""
+                  } else {
+                    q"""
                     $str.replace(
                       $litParamName,
                       ${param.paramName}.map(${Types.encoders.term}.toURLSegment).getOrElse("")
                     )
                    """
+                  }
                 }
+            val path = q"""${Types.zhttpPath.term}.decode($pathString)"""
+
+            val hasQueryParams = queryParameters.nonEmpty
+            val hasOptionalQueryParams = queryParameters.exists(!_.isRequired)
+
+            val queryParams =
+              if (hasOptionalQueryParams) {
+                val optionalPairs = queryParameters.map { param =>
+                  q"""${param.paramName}.map { value => (${Lit.String(
+                      param.name
+                    )}, ${Types.encoders.term}.toURLSegment(value)) }"""
+                }
+                q"""${Types.zhttpQueryParams.term}(List(..$optionalPairs).map(_.toOption).flatten.map { case (k, v) => (k, ${Types.chunk_.term}(v)) } : _*)"""
+              } else {
+                val pairs = queryParameters.map { param =>
+                  q"""(${Lit.String(
+                      param.name
+                    )}, ${Types.encoders.term}.toURLSegment(${param.paramName}))"""
+                }
+                q"""${Types.zhttpQueryParams.term}(..$pairs)"""
               }
-          val path = q"""${Types.zhttpPath.term}.decode($pathString)"""
 
-          val hasQueryParams = queryParameters.nonEmpty
-          val hasOptionalQueryParams = queryParameters.exists(!_.isRequired)
+            val url =
+              if (hasQueryParams)
+                q"""baseURL.withPath(baseURL.path ++ $path).withQueryParams($queryParams)"""
+              else
+                q"""baseURL.withPath(baseURL.path ++ $path)"""
 
-          val queryParams =
-            if (hasOptionalQueryParams) {
-              val optionalPairs = queryParameters.map { param =>
-                q"""${param.paramName}.map { value => (${Lit.String(
-                    param.name
-                  )}, ${Types.encoders.term}.toURLSegment(value)) }"""
-              }
-              q"""${Types.zhttpQueryParams.term}(List(..$optionalPairs).map(_.toOption).flatten.map { case (k, v) => (k, ${Types.chunk_.term}(v)) } : _*)"""
-            } else {
-              val pairs = queryParameters.map { param =>
-                q"""(${Lit.String(
-                    param.name
-                  )}, ${Types.encoders.term}.toURLSegment(${param.paramName}))"""
-              }
-              q"""${Types.zhttpQueryParams.term}(..$pairs)"""
-            }
-
-          val url =
-            if (hasQueryParams)
-              q"""baseURL.withPath(baseURL.path ++ $path).withQueryParams($queryParams)"""
-            else
-              q"""baseURL.withPath(baseURL.path ++ $path)"""
-
-          val body =
-            endpoint.body match {
-              case Some(RequestBody(ContentType.`application/json`, typ))    =>
-                val bodyType = typ.scalaType(model)
-                q"""${Types.zio_.term}.succeed(${Types.encoders.term}.toJsonBody[${bodyType.typ}](this.codecs, $bodyParam))"""
-              case Some(RequestBody(ContentType.`multipart/form-data`, typ)) =>
-                val bodyType = typ.scalaType(model)
-                q"""${Types.zio_.term}.fromEither(${Types.encoders.term}.toMultipartFormDataBody[${bodyType.typ}]($bodyParam, this.boundary))
+            val body =
+              endpoint.body match {
+                case Some(RequestBody(ContentType.`application/json`, typ))    =>
+                  val bodyType = typ.scalaType(model)
+                  q"""${Types.zio_.term}.succeed(${Types.encoders.term}.toJsonBody[${bodyType.typ}](this.codecs, $bodyParam))"""
+                case Some(RequestBody(ContentType.`multipart/form-data`, typ)) =>
+                  val bodyType = typ.scalaType(model)
+                  q"""${Types.zio_.term}.fromEither(${Types.encoders.term}.toMultipartFormDataBody[${bodyType.typ}]($bodyParam, this.boundary))
                         .mapError(${Types.openAIFailure.term}.EncodingError(_))
                  """
-              case None                                                      =>
-                q"""${Types.zio_.term}.succeed(${Types.zhttpBody.term}.empty)"""
-            }
+                case None                                                      =>
+                  q"""${Types.zio_.term}.succeed(${Types.zhttpBody.term}.empty)"""
+              }
 
-          val contentType =
-            if (endpoint.body.exists(_.contentType == ContentType.`multipart/form-data`))
-              q"""${Types.zhttpHeader.term}.ContentType(${endpoint.bodyContentTypeAsMediaType}, boundary = Some(this.boundary))"""
-            else
-              q"""${Types.zhttpHeader.term}.ContentType(${endpoint.bodyContentTypeAsMediaType})"""
+            val contentType =
+              if (endpoint.body.exists(_.contentType == ContentType.`multipart/form-data`))
+                q"""${Types.zhttpHeader.term}.ContentType(${endpoint.bodyContentTypeAsMediaType}, boundary = Some(this.boundary))"""
+              else
+                q"""${Types.zhttpHeader.term}.ContentType(${endpoint.bodyContentTypeAsMediaType})"""
 
-          val request =
-            q"""${Types.zhttpRequest.term}.default(
+            val request =
+              q"""${Types.zhttpRequest.term}.default(
                method = ${endpoint.method.constructor.term},
                url = $url,
                body = body
@@ -294,24 +307,24 @@ trait APIGenerator {
               .addHeader($contentType)
              """
 
-          val mapResponse =
-            endpoint.response match {
-              case Some(responseBody)
-                  if responseBody.contentType == ContentType.`application/json` =>
-                val responseType = responseBody.typ.scalaType(model)
-                q"""${Types.decoders.term}.tryDecodeJsonResponse[${responseType.typ}](this.codecs, req, response)"""
-              case None =>
-                q"""${Types.decoders.term}.validateEmptyResponse(req, response)"""
-              case _    =>
-                throw new IllegalArgumentException(
-                  s"Unsupported response content type: ${endpoint.response}"
-                )
-            }
+            val mapResponse =
+              endpoint.response match {
+                case Some(responseBody)
+                    if responseBody.contentType == ContentType.`application/json` =>
+                  val responseType = responseBody.typ.scalaType(model)
+                  q"""${Types.decoders.term}.tryDecodeJsonResponse[${responseType.typ}](this.codecs, req, response)"""
+                case None =>
+                  q"""${Types.decoders.term}.validateEmptyResponse(req, response)"""
+                case _    =>
+                  throw new IllegalArgumentException(
+                    s"Unsupported response content type: ${endpoint.response}"
+                  )
+              }
 
-          val base =
-            q"""def ${endpoint.methodName}(..$paramList): ${Types
-                .zio(ScalaType.any, Types.openAIFailure, responseType)
-                .typ} = {
+            val base =
+              q"""def ${endpoint.methodName}(..$paramList): ${Types
+                  .zio(ScalaType.any, Types.openAIFailure, responseType)
+                  .typ} = {
                   $body.flatMap { body =>
                     val req = $request
                     client.request(req).mapError(${Types.openAIFailure.term}.Unknown(_)).flatMap { response =>
@@ -321,13 +334,35 @@ trait APIGenerator {
                 }
             """
 
-          for {
-            doc   <- generateScaladoc(endpoint)
-            result = if (endpoint.isDeprecated)
-                       base.copy(mods = doc :: Mod.Annot(init"deprecated()") :: base.mods)
-                     else base.copy(mods = doc :: base.mods)
-          } yield result
-        }
+            for {
+              doc   <- generateScaladoc(endpoint)
+              optionalStreamingMethods =
+                if (endpoint.hasStreamingOverride(model)) {
+                  val streaming: Defn.Def =
+                    q"""def ${endpoint.methodNameStreaming}(..$paramList): ${
+                      Types
+                        .zstream(ScalaType.any, Types.openAIFailure, responseType)
+                        .typ} = {
+                        ???
+                      }
+                    """
+                  List(
+                    if (endpoint.isDeprecated)
+                      streaming
+                        .copy(mods = doc :: Mod.Annot(init"deprecated()") :: streaming.mods)
+                    else
+                      streaming
+                  )
+                } else {
+                  List.empty
+                }
+
+              result = if (endpoint.isDeprecated)
+                         base.copy(mods = doc :: Mod.Annot(init"deprecated()") :: base.mods)
+                       else base.copy(mods = doc :: base.mods)
+            } yield List(result) ++ optionalStreamingMethods
+          }
+          .map(_.flatten)
 
       jsonTypes = api.endpoints.flatMap { endpoint =>
                     endpoint.body.toList.collect {
