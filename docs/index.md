@@ -20,7 +20,8 @@ The following example is the translation of [OpenAI's official quickstart exampl
 ```scala mdoc
 import zio.{Console, ZIO, ZIOAppDefault}
 import zio.openai._
-import zio.openai.model.CreateCompletionRequest.Prompt
+import zio.openai.model.CreateCompletionRequest.{Model, Prompt}
+import zio.openai.model.CreateCompletionRequest.Model.Models
 import zio.openai.model.Temperature
 
 object Quickstart extends ZIOAppDefault {
@@ -41,11 +42,11 @@ object Quickstart extends ZIOAppDefault {
     for {
       animal <- Console.readLine("Animal: ")
       result <- Completions.createCompletion(
-        model = "text-davinci-003",
+        model = Model.Predefined(Models.`Text-davinci-003`),
         prompt = generatePrompt(animal),
         temperature = Temperature(0.6)
       )
-      _ <- Console.printLine("Names: " + result.choices.flatMap(_.text.toOption).mkString(", "))
+      _ <- Console.printLine("Names: " + result.choices.map(_.text).mkString(", "))
     } yield ()
 
   override def run =
