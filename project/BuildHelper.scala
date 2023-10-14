@@ -39,7 +39,7 @@ object BuildHelper {
     "-Wconf:cat=lint-deprecation&src=src_managed/.*:s"
   ) ++ {
     if (sys.env.contains("CI")) {
-      Seq("-Wconf:any:e")
+      Seq("-Xfatal-warnings")
     } else {
       Nil // to enable Scalafix locally
     }
