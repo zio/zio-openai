@@ -69,7 +69,7 @@ lazy val examples = Project("zio-openai-examples", file("zio-openai-examples"))
   .settings(dottySettings)
   .settings(
     publish / skip := true,
-    scalacOptions += "-Wconf:cat=deprecation:s",
+    scalacOptions += "-Wconf:cat=deprecation:s"
   )
   .dependsOn(zioOpenAI)
 
