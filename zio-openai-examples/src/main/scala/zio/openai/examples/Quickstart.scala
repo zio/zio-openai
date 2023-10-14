@@ -3,6 +3,7 @@ package zio.openai.examples
 import zio.json.ast.Json
 import zio.{Console, ZIO, ZIOAppDefault}
 import zio.openai._
+import zio.openai.model.CreateCompletionRequest.Model.CaseType1
 import zio.openai.model.CreateCompletionRequest.{Model, Prompt}
 import zio.openai.model.Temperature
 
@@ -26,7 +27,7 @@ object Quickstart extends ZIOAppDefault {
     for {
       animal <- Console.readLine("Animal: ")
       result <- Completions.createCompletion(
-                  model = Model(Map("text-davinci-003" -> Json.Null)),
+                  model = Model.Case1(CaseType1.`Text-davinci-003`),
                   prompt = generatePrompt(animal),
                   temperature = Temperature(0.6)
                 )

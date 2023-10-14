@@ -287,12 +287,22 @@ object TypeDefinition {
       case Some(ref) => Ref(ref)
       case None      =>
         val oneOf = Option(schema.getOneOf).map(_.asScala).getOrElse(List.empty)
+        val anyOf = Option(schema.getAnyOf).map(_.asScala).getOrElse(List.empty)
 
         if (oneOf.nonEmpty) {
           Alternatives(
             directName,
             parents.name,
             alternatives = oneOf.zipWithIndex.map { case (schema, idx) =>
+              TypeDefinition.from(parents / directName, "CaseType" + idx, schema)
+            }.toList,
+            Option(schema.getDescription)
+          )
+        } else if (anyOf.nonEmpty) {
+          Alternatives(
+            directName,
+            parents.name,
+            alternatives = anyOf.zipWithIndex.map { case (schema, idx) =>
               TypeDefinition.from(parents / directName, "CaseType" + idx, schema)
             }.toList,
             Option(schema.getDescription)
@@ -304,6 +314,7 @@ object TypeDefinition {
               val reqd = Option(schema.getRequired).map(_.asScala).getOrElse(List.empty)
 
               if (props.isEmpty) {
+                println(s"Choosing DynamicObject because props is empty for ${schema.getName} [${schema.getType}], parents: $parents")
                 DynamicObject(
                   directName,
                   parents.name,

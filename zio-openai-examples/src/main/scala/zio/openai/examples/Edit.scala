@@ -12,7 +12,7 @@ object Edit extends ZIOAppDefault {
   def createEdit =
     for {
       response <- Edits.createEdit(
-                    model = Model(Map("text-davinci-edit-001" -> Json.Null)),
+                    model = Model.Case1(Model.CaseType1.`Text-davinci-edit-001`),
                     input = "What day of the wek is it?",
                     instruction = "Fix the spelling mistakes"
                   )
