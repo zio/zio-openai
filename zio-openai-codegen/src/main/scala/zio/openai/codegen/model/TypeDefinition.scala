@@ -43,13 +43,20 @@ sealed trait TypeDefinition {
         f(TypeDefinition.NonEmptyArray(itemType.transform(f)))
       case TypeDefinition.ConstrainedArray(itemType, min, max)                              =>
         f(TypeDefinition.ConstrainedArray(itemType.transform(f), min, max))
-      case TypeDefinition.Alternatives(directName, parentName, alternatives, description)   =>
+      case TypeDefinition.Alternatives(
+            directName,
+            parentName,
+            alternatives,
+            description,
+            customCaseNames
+          ) =>
         f(
           TypeDefinition.Alternatives(
             directName,
             parentName,
             alternatives.map(_.transform(f)),
-            description
+            description,
+            customCaseNames
           )
         )
       case TypeDefinition.Enum(name, directName, values, description)                       => f(this)
@@ -218,30 +225,34 @@ object TypeDefinition {
     directName: String,
     parentName: Option[String],
     alternatives: List[TypeDefinition],
-    description: Option[String]
+    description: Option[String],
+    customCaseNames: List[String] = Nil
   ) extends TypeDefinition with NonPrimitive {
 
-    lazy val caseNames: List[String] = {
-      lazy val default = alternatives.indices.map(idx => s"Case$idx").toList
-
-      if (
-        alternatives.collectFirst { case np: NonPrimitive =>
-          np
-        }.nonEmpty
-      ) {
-        default
+    lazy val caseNames: List[String] =
+      if (customCaseNames != Nil) {
+        customCaseNames
       } else {
-        val typeNameBased = alternatives.map { typ =>
-          typ.verboseName
-        }.distinct
+        lazy val default = alternatives.indices.map(idx => s"Case$idx").toList
 
-        if (typeNameBased.size == alternatives.size) {
-          typeNameBased
-        } else {
+        if (
+          alternatives.collectFirst { case np: NonPrimitive =>
+            np
+          }.nonEmpty
+        ) {
           default
+        } else {
+          val typeNameBased = alternatives.map { typ =>
+            typ.verboseName
+          }.distinct
+
+          if (typeNameBased.size == alternatives.size) {
+            typeNameBased
+          } else {
+            default
+          }
         }
       }
-    }
 
     def constructors(model: Model): List[(ScalaType, TypeDefinition)] = {
       val typ = scalaType(model)
@@ -299,14 +310,32 @@ object TypeDefinition {
             Option(schema.getDescription)
           )
         } else if (anyOf.nonEmpty) {
-          Alternatives(
-            directName,
-            parents.name,
-            alternatives = anyOf.zipWithIndex.map { case (schema, idx) =>
-              TypeDefinition.from(parents / directName, "CaseType" + idx, schema)
-            }.toList,
-            Option(schema.getDescription)
-          )
+          anyOf match {
+            case Seq(first, second)
+                if first.getType == "string" && second.getType == "string" && first.getEnum == null && second.getEnum != null =>
+              Alternatives(
+                directName,
+                parents.name,
+                alternatives = List(
+                  TypeDefinition.from(parents / directName, "Custom", first),
+                  TypeDefinition.from(parents / directName, directName + "s", second)
+                ),
+                Option(schema.getDescription),
+                customCaseNames = List(
+                  "Custom",
+                  "Predefined"
+                )
+              )
+            case _ =>
+              Alternatives(
+                directName,
+                parents.name,
+                alternatives = anyOf.zipWithIndex.map { case (schema, idx) =>
+                  TypeDefinition.from(parents / directName, "CaseType" + idx, schema)
+                }.toList,
+                Option(schema.getDescription)
+              )
+          }
         } else {
           Option(schema.getType).getOrElse("object") match {
             case "object" =>
@@ -314,7 +343,6 @@ object TypeDefinition {
               val reqd = Option(schema.getRequired).map(_.asScala).getOrElse(List.empty)
 
               if (props.isEmpty) {
-                println(s"Choosing DynamicObject because props is empty for ${schema.getName} [${schema.getType}], parents: $parents")
                 DynamicObject(
                   directName,
                   parents.name,

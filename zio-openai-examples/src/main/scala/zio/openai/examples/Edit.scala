@@ -1,7 +1,7 @@
 package zio.openai.examples
 
 import zio.json.ast.Json
-import zio.{Console, ZIOAppDefault}
+import zio.{ Console, ZIOAppDefault }
 import zio.openai.Edits
 import zio.openai.model.CreateEditRequest.Model
 
@@ -12,7 +12,7 @@ object Edit extends ZIOAppDefault {
   def createEdit =
     for {
       response <- Edits.createEdit(
-                    model = Model.Case1(Model.CaseType1.`Text-davinci-edit-001`),
+                    model = Model.Predefined(Model.Models.`Text-davinci-edit-001`),
                     input = "What day of the wek is it?",
                     instruction = "Fix the spelling mistakes"
                   )

@@ -2,10 +2,10 @@ package zio.openai.examples
 
 import zio.json.ast.Json
 import zio.openai.Completions
-import zio.openai.model.CreateCompletionRequest.Model.CaseType1
-import zio.openai.model.CreateCompletionRequest.{MaxTokens, Model, Prompt, Stop}
-import zio.openai.model.{FrequencyPenalty, PresencePenalty, Temperature, TopP}
-import zio.{Console, ZIOAppDefault}
+import zio.openai.model.CreateCompletionRequest.Model.Models
+import zio.openai.model.CreateCompletionRequest.{ MaxTokens, Model, Prompt, Stop }
+import zio.openai.model.{ FrequencyPenalty, PresencePenalty, Temperature, TopP }
+import zio.{ Console, ZIOAppDefault }
 
 /** Based on https://beta.openai.com/examples/default-explain-code
   */
@@ -14,7 +14,7 @@ object ExplainCode extends ZIOAppDefault {
   def program =
     for {
       response <- Completions.createCompletion(
-                    model = Model.Case1(CaseType1.`Gpt-3.5-turbo-instruct`),
+                    model = Model.Predefined(Models.`Gpt-3.5-turbo-instruct`),
                     prompt = Prompt.String(
                       """class Log:
                         |    def __init__(self, path):

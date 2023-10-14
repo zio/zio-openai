@@ -148,19 +148,19 @@ object Model {
 
   private def collectReferencedTypes(types: Seq[TypeDefinition]): Map[String, TypeDefinition] =
     types.flatMap {
-      case obj @ TypeDefinition.Object(_, _, _, fields)             =>
+      case obj @ TypeDefinition.Object(_, _, _, fields)                =>
         Map(obj.name -> obj) ++ collectReferencedTypes(fields.map(_.typ))
-      case alt @ TypeDefinition.Alternatives(_, _, alternatives, _) =>
+      case alt @ TypeDefinition.Alternatives(_, _, alternatives, _, _) =>
         Map(alt.name -> alt) ++ collectReferencedTypes(alternatives)
-      case arr @ TypeDefinition.Array(itemType)                     =>
+      case arr @ TypeDefinition.Array(itemType)                        =>
         Map(arr.name -> arr) ++ collectReferencedTypes(Seq(itemType))
-      case arr @ TypeDefinition.NonEmptyArray(itemType)             =>
+      case arr @ TypeDefinition.NonEmptyArray(itemType)                =>
         Map(arr.name -> arr) ++ collectReferencedTypes(Seq(itemType))
-      case arr @ TypeDefinition.ConstrainedArray(itemType, _, _)    =>
+      case arr @ TypeDefinition.ConstrainedArray(itemType, _, _)       =>
         Map(arr.name -> arr) ++ collectReferencedTypes(Seq(itemType))
-      case TypeDefinition.Ref(_)                                    =>
+      case TypeDefinition.Ref(_)                                       =>
         Map.empty[String, TypeDefinition]
-      case typ: TypeDefinition                                      =>
+      case typ: TypeDefinition                                         =>
         Map(typ.name -> typ)
     }.toMap
 }
