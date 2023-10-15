@@ -23,9 +23,9 @@ object BuildHelper {
     list.map(v => (v.split('.').take(2).mkString("."), v)).toMap
   }
   val Scala213: String = versions("2.13")
-  val ScalaDotty: String = versions("3.2")
+  val ScalaDotty: String = versions("3.3")
 
-  val SilencerVersion = "1.7.12"
+  val SilencerVersion = "1.7.14"
 
   private val stdOptions = Seq(
     "-deprecation",
@@ -39,7 +39,7 @@ object BuildHelper {
     "-Wconf:cat=lint-deprecation&src=src_managed/.*:s"
   ) ++ {
     if (sys.env.contains("CI")) {
-      Seq("-Wconf:any:e")
+      Seq("-Xfatal-warnings")
     } else {
       Nil // to enable Scalafix locally
     }

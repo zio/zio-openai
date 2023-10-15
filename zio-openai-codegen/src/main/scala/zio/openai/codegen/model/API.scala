@@ -6,6 +6,8 @@ import zio.openai.codegen.generator.Naming.{ toCamelCase, toPascalCase }
 import scala.jdk.CollectionConverters.*
 
 final case class API(name: String, endpoints: List[Endpoint]) {
+  require(name.nonEmpty)
+
   def transform(f: TypeDefinition => TypeDefinition): API =
     copy(endpoints = endpoints.map(_.transform(f)))
 }
@@ -29,7 +31,13 @@ object API {
           .getOrElse(Map.empty[String, Any])
           .get("x-oaiMeta") match {
           case Some(meta: java.util.HashMap[?, ?]) =>
-            val group = meta.asScala.toMap.asInstanceOf[Map[String, String]].getOrElse("group", "")
+            val groupFromPath = pathString
+              .split("/")
+              .find(_.nonEmpty)
+              .filter(s => s(0).isLetter)
+              .getOrElse("other")
+            val group =
+              meta.asScala.toMap.asInstanceOf[Map[String, String]].getOrElse("group", groupFromPath)
             List((group, pathString, method, op))
           case _                                   =>
             println(s"$path/${op.getOperationId} has no x-oaiMeta")

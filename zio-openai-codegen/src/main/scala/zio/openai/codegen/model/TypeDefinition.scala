@@ -43,13 +43,20 @@ sealed trait TypeDefinition {
         f(TypeDefinition.NonEmptyArray(itemType.transform(f)))
       case TypeDefinition.ConstrainedArray(itemType, min, max)                              =>
         f(TypeDefinition.ConstrainedArray(itemType.transform(f), min, max))
-      case TypeDefinition.Alternatives(directName, parentName, alternatives, description)   =>
+      case TypeDefinition.Alternatives(
+            directName,
+            parentName,
+            alternatives,
+            description,
+            customCaseNames
+          ) =>
         f(
           TypeDefinition.Alternatives(
             directName,
             parentName,
             alternatives.map(_.transform(f)),
-            description
+            description,
+            customCaseNames
           )
         )
       case TypeDefinition.Enum(name, directName, values, description)                       => f(this)
@@ -218,27 +225,40 @@ object TypeDefinition {
     directName: String,
     parentName: Option[String],
     alternatives: List[TypeDefinition],
-    description: Option[String]
+    description: Option[String],
+    customCaseNames: List[String] = Nil
   ) extends TypeDefinition with NonPrimitive {
 
-    lazy val caseNames: List[String] = {
-      lazy val default = alternatives.indices.map(idx => s"Case$idx").toList
-      val typeNameBased = alternatives.map { typ =>
-        typ.verboseName
-      }.distinct
-
-      if (typeNameBased.size == alternatives.size) {
-        typeNameBased
+    lazy val caseNames: List[String] =
+      if (customCaseNames != Nil) {
+        customCaseNames
       } else {
-        default
+        lazy val default = alternatives.indices.map(idx => s"Case$idx").toList
+
+        if (
+          alternatives.collectFirst { case np: NonPrimitive =>
+            np
+          }.nonEmpty
+        ) {
+          default
+        } else {
+          val typeNameBased = alternatives.map { typ =>
+            typ.verboseName
+          }.distinct
+
+          if (typeNameBased.size == alternatives.size) {
+            typeNameBased
+          } else {
+            default
+          }
+        }
       }
-    }
 
     def constructors(model: Model): List[(ScalaType, TypeDefinition)] = {
       val typ = scalaType(model)
 
       alternatives.zip(caseNames).map { case (alt, caseName) =>
-        typ / caseName -> alt
+        typ / caseName -> model.resolve(alt)
       }
     }
   }
@@ -248,12 +268,15 @@ object TypeDefinition {
     parentName: Option[String],
     values: List[String],
     description: Option[String]
-  ) extends TypeDefinition with NonPrimitive
+  ) extends TypeDefinition with NonPrimitive {
+    override def verboseName: String = directName.capitalize
+  }
 
   final case class Ref(name: String) extends TypeDefinition {
     override val description: Option[String] = None
 
     val referencedName: String = name.stripPrefix("#/components/schemas/")
+    override val verboseName: String = referencedName.capitalize
 
     override def scalaType(model: Model): ScalaType =
       model.types(referencedName).scalaType(model)
@@ -275,16 +298,44 @@ object TypeDefinition {
       case Some(ref) => Ref(ref)
       case None      =>
         val oneOf = Option(schema.getOneOf).map(_.asScala).getOrElse(List.empty)
+        val anyOf = Option(schema.getAnyOf).map(_.asScala).getOrElse(List.empty)
 
         if (oneOf.nonEmpty) {
           Alternatives(
             directName,
             parents.name,
             alternatives = oneOf.zipWithIndex.map { case (schema, idx) =>
-              TypeDefinition.from(parents / directName, "case" + idx, schema)
+              TypeDefinition.from(parents / directName, "CaseType" + idx, schema)
             }.toList,
             Option(schema.getDescription)
           )
+        } else if (anyOf.nonEmpty) {
+          anyOf match {
+            case Seq(first, second)
+                if first.getType == "string" && second.getType == "string" && first.getEnum == null && second.getEnum != null =>
+              Alternatives(
+                directName,
+                parents.name,
+                alternatives = List(
+                  TypeDefinition.from(parents / directName, "Custom", first),
+                  TypeDefinition.from(parents / directName, directName + "s", second)
+                ),
+                Option(schema.getDescription),
+                customCaseNames = List(
+                  "Custom",
+                  "Predefined"
+                )
+              )
+            case _ =>
+              Alternatives(
+                directName,
+                parents.name,
+                alternatives = anyOf.zipWithIndex.map { case (schema, idx) =>
+                  TypeDefinition.from(parents / directName, "CaseType" + idx, schema)
+                }.toList,
+                Option(schema.getDescription)
+              )
+          }
         } else {
           Option(schema.getType).getOrElse("object") match {
             case "object" =>
@@ -307,9 +358,12 @@ object TypeDefinition {
                     Field(
                       fieldName,
                       TypeDefinition.from(parents / directName, fieldName, fieldSchema),
-                      isRequiredOverride(directName, fieldName).getOrElse(reqd.contains(fieldName)),
+                      isRequiredOverride(parents, directName, fieldName).getOrElse(
+                        reqd.contains(fieldName)
+                      ),
                       Option(fieldSchema.getNullable).exists(_.booleanValue()),
-                      Option(fieldSchema.getDescription)
+                      Option(fieldSchema.getDescription),
+                      controlsStreamingResponse = isStreamingOverride(directName, fieldName)
                     )
                   }.toList
                 )
@@ -402,28 +456,64 @@ object TypeDefinition {
   private def getKnownFieldsFor(name: String, parents: ParentChain): List[Field] =
     if (name == "hyperparams" && parents.items == Chunk("FineTune")) {
       List(
-        Field("batch_size", PrimitiveInteger, isRequired = false, isNullable = false, None),
+        Field(
+          "batch_size",
+          PrimitiveInteger,
+          isRequired = false,
+          isNullable = false,
+          None,
+          controlsStreamingResponse = false
+        ),
         Field(
           "learning_rate_multiplier",
           PrimitiveNumber,
           isRequired = false,
           isNullable = false,
-          None
+          None,
+          controlsStreamingResponse = false
         ),
-        Field("n_epochs", PrimitiveInteger, isRequired = false, isNullable = false, None),
-        Field("prompt_loss_weight", PrimitiveNumber, isRequired = false, isNullable = false, None)
+        Field(
+          "n_epochs",
+          PrimitiveInteger,
+          isRequired = false,
+          isNullable = false,
+          None,
+          controlsStreamingResponse = false
+        ),
+        Field(
+          "prompt_loss_weight",
+          PrimitiveNumber,
+          isRequired = false,
+          isNullable = false,
+          None,
+          controlsStreamingResponse = false
+        )
       )
     } else {
       List.empty
     }
 
   // TODO: make this configurable
-  private def isRequiredOverride(objName: String, fieldName: String): Option[Boolean] =
+  private def isRequiredOverride(
+    parents: ParentChain,
+    objName: String,
+    fieldName: String
+  ): Option[Boolean] =
     if (objName == "CreateEditResponse" && fieldName == "id") {
       Some(false)
     } else if (objName == "CreateEditResponse" && fieldName == "model") {
       Some(false)
+    } else if (
+      parents.items.lastOption.contains(
+        "CreateCompletionResponse"
+      ) && objName == "choices_item" && fieldName == "finish_reason"
+    ) {
+      Some(false)
     } else {
       None
     }
+
+  // TODO: make this configurable
+  private def isStreamingOverride(objName: String, fieldName: String): Boolean =
+    fieldName == "stream"
 }

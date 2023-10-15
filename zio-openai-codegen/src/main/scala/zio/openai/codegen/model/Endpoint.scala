@@ -17,6 +17,7 @@ final case class Endpoint(
   summary: Option[String]
 ) {
   def methodName: Term.Name = Term.Name(name)
+  def methodNameStreaming: Term.Name = Term.Name(name + "Streaming")
 
   def pathParameters: List[Parameter.PathParameter] =
     parameters.collect { case pp: PathParameter =>
@@ -31,6 +32,17 @@ final case class Endpoint(
     response match {
       case Some(ResponseBody(_, typ)) => typ.scalaType(model)
       case None                       => ScalaType.unit
+    }
+
+  def streamingResponseType(model: Model): ScalaType =
+    name match {
+      case "createChatCompletion" =>
+        // NOTE: not defined properly in the OpenAPI spec
+        model.finalTypes("CreateChatCompletionStreamResponse").scalaType(model)
+      case "createCompletion"     =>
+        model.finalTypes("CreateCompletionResponse").scalaType(model)
+      case _                      =>
+        responseType(model)
     }
 
   def bodyContentTypeAsString: String =
@@ -56,6 +68,11 @@ final case class Endpoint(
           }
         case _                                          => None
       }
+
+  def hasStreamingOverride(model: Model): Boolean =
+    hasSingleBodyParameter(model).exists { obj =>
+      obj.fields.exists(_.controlsStreamingResponse)
+    }
 
   def transform(f: TypeDefinition => TypeDefinition): Endpoint =
     copy(
