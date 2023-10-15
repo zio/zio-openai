@@ -74,6 +74,7 @@ trait APIGenerator {
           .foreach(api.endpoints) { endpoint =>
             val paramList = getParamList(model, endpoint)
             val responseType = endpoint.responseType(model)
+
             val base: Decl.Def =
               q"def ${endpoint.methodName}(..$paramList): ${Types.zio(ScalaType.any, Types.openAIFailure, responseType).typ}"
 
@@ -99,16 +100,18 @@ trait APIGenerator {
                   flatDoc                 <- generateFlatScaladoc(endpoint, obj)
                   optionalStreamingMethods =
                     if (endpoint.hasStreamingOverride(model)) {
+                      val streamingResponseType = endpoint.streamingResponseType(model)
                       val streaming =
                         q"""def ${endpoint.methodNameStreaming}(..$paramList): ${Types
-                            .zstream(ScalaType.any, Types.openAIFailure, responseType)
+                            .zstream(ScalaType.any, Types.openAIFailure, streamingResponseType)
                             .typ}"""
+                      val fieldNamesStreaming =
+                        getObjectFieldNames(obj, replaceStreamingWith = Some(true))
                       val flatStreaming =
-                        q"""def ${endpoint.methodNameStreaming}(..$fieldList): ${
-                          Types
-                            .zstream(ScalaType.any, Types.openAIFailure, responseType)
+                        q"""def ${endpoint.methodNameStreaming}(..$fieldList): ${Types
+                            .zstream(ScalaType.any, Types.openAIFailure, streamingResponseType)
                             .typ} =
-                              ${endpoint.methodNameStreaming}($cons(..$fieldNames))
+                              ${endpoint.methodNameStreaming}($cons(..$fieldNamesStreaming))
                          """
                       List(
                         if (endpoint.isDeprecated)
@@ -121,7 +124,7 @@ trait APIGenerator {
                             .copy(mods = doc :: Mod.Annot(init"deprecated()") :: flatStreaming.mods)
                         else
                           flatStreaming
-                        )
+                      )
                     } else {
                       List.empty
                     }
@@ -180,10 +183,11 @@ trait APIGenerator {
                   flatDoc                 <- generateFlatScaladoc(endpoint, obj)
                   optionalStreamingMethods =
                     if (endpoint.hasStreamingOverride(model)) {
+                      val streamingResponseType = endpoint.streamingResponseType(model)
                       val fieldNames = fieldList.map(p => Term.Name(p.name.value))
                       val streaming =
                         q"""def ${endpoint.methodNameStreaming}(..$fieldList): ${Types
-                            .zstream(svc, Types.openAIFailure, responseType)
+                            .zstream(svc, Types.openAIFailure, streamingResponseType)
                             .typ} =
                               ${Types.zstream_.term}.serviceWithStream(_.${endpoint.methodNameStreaming}(..$fieldNames))
                          """
@@ -335,16 +339,22 @@ trait APIGenerator {
             """
 
             for {
-              doc   <- generateScaladoc(endpoint)
+              doc                     <- generateScaladoc(endpoint)
               optionalStreamingMethods =
                 if (endpoint.hasStreamingOverride(model)) {
+                  val streamingResponseType = endpoint.streamingResponseType(model)
                   val streaming: Defn.Def =
-                    q"""def ${endpoint.methodNameStreaming}(..$paramList): ${
-                      Types
-                        .zstream(ScalaType.any, Types.openAIFailure, responseType)
-                        .typ} = {
-                        ???
-                      }
+                    q"""def ${endpoint.methodNameStreaming}(..$paramList): ${Types
+                        .zstream(ScalaType.any, Types.openAIFailure, streamingResponseType)
+                        .typ} = ${Types.zstream_.term}.unwrap {
+                          $body.flatMap { body =>
+                            val req = $request
+                            client.request(req).mapError(${Types.openAIFailure.term}.Unknown(_)).map { response =>
+                              val bodyStream = response.body.asStream.mapError(${Types.openAIFailure.term}.Unknown(_))
+                              zio.openai.internal.sseStream[${streamingResponseType.typ}](bodyStream)
+                            }
+                          }
+                        }
                     """
                   List(
                     if (endpoint.isDeprecated)

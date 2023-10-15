@@ -358,7 +358,9 @@ object TypeDefinition {
                     Field(
                       fieldName,
                       TypeDefinition.from(parents / directName, fieldName, fieldSchema),
-                      isRequiredOverride(directName, fieldName).getOrElse(reqd.contains(fieldName)),
+                      isRequiredOverride(parents, directName, fieldName).getOrElse(
+                        reqd.contains(fieldName)
+                      ),
                       Option(fieldSchema.getNullable).exists(_.booleanValue()),
                       Option(fieldSchema.getDescription),
                       controlsStreamingResponse = isStreamingOverride(directName, fieldName)
@@ -492,10 +494,20 @@ object TypeDefinition {
     }
 
   // TODO: make this configurable
-  private def isRequiredOverride(objName: String, fieldName: String): Option[Boolean] =
+  private def isRequiredOverride(
+    parents: ParentChain,
+    objName: String,
+    fieldName: String
+  ): Option[Boolean] =
     if (objName == "CreateEditResponse" && fieldName == "id") {
       Some(false)
     } else if (objName == "CreateEditResponse" && fieldName == "model") {
+      Some(false)
+    } else if (
+      parents.items.lastOption.contains(
+        "CreateCompletionResponse"
+      ) && objName == "choices_item" && fieldName == "finish_reason"
+    ) {
       Some(false)
     } else {
       None

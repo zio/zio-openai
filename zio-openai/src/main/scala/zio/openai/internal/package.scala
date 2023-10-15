@@ -1,12 +1,16 @@
 package zio.openai
 
 import zio.json.ast.Json
+import zio.openai.model.OpenAIFailure
 import zio.prelude._
 import zio.prelude.data.Optional
 import zio.schema.annotation.directDynamicMapping
+import zio.schema.codec.JsonCodec
 import zio.schema.{ DynamicValue, Schema, StandardType, TypeId }
+import zio.stream.{ Take, ZPipeline, ZStream }
 import zio.{ Chunk, NonEmptyChunk }
 
+import java.nio.charset.StandardCharsets
 import java.util.Base64
 import scala.collection.immutable.ListMap
 
@@ -120,4 +124,28 @@ package object internal {
       case DynamicValue.Error(message)                 =>
         Left(message)
     }
+
+  def sseStream[Elem: Schema](
+    rawStream: ZStream[Any, OpenAIFailure, Byte]
+  ): ZStream[Any, OpenAIFailure, Elem] = {
+    val codec = JsonCodec.schemaBasedBinaryCodec(Schema[Elem])
+    rawStream
+      .via(ZPipeline.utf8Decode.mapError(OpenAIFailure.Unknown(_)))
+      .via(ZPipeline.splitLines)
+      .filter(line => line.nonEmpty && !line.startsWith(":"))
+      .map { line =>
+        if (line.startsWith("data: [DONE]")) {
+          Take.end
+        } else if (line.startsWith("data:")) {
+          val data = line.drop(6)
+          codec.decode(Chunk.fromArray(data.getBytes(StandardCharsets.UTF_8))) match {
+            case Left(error)  => Take.fail(OpenAIFailure.Unknown(error))
+            case Right(value) => Take.single(value)
+          }
+        } else {
+          Take.chunk(Chunk.empty)
+        }
+      }
+      .flattenTake
+  }
 }

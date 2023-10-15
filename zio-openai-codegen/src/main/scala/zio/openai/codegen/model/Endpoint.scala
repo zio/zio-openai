@@ -34,6 +34,17 @@ final case class Endpoint(
       case None                       => ScalaType.unit
     }
 
+  def streamingResponseType(model: Model): ScalaType =
+    name match {
+      case "createChatCompletion" =>
+        // NOTE: not defined properly in the OpenAPI spec
+        model.finalTypes("CreateChatCompletionStreamResponse").scalaType(model)
+      case "createCompletion"     =>
+        model.finalTypes("CreateCompletionResponse").scalaType(model)
+      case _                      =>
+        responseType(model)
+    }
+
   def bodyContentTypeAsString: String =
     body match {
       case Some(RequestBody(contentType, _)) => contentType.asString

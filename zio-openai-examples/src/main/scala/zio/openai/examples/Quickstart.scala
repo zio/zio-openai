@@ -24,17 +24,20 @@ object Quickstart extends ZIOAppDefault {
 
   def loop =
     for {
-      animal <- Console.readLine("Animal: ")
-      result <- Completions.createCompletion(
-                  model = Model.Predefined(Model.Models.`Text-davinci-003`),
-                  prompt = generatePrompt(animal),
-                  temperature = Temperature(0.6)
-                )
-      _      <- Console.printLine("Names: " + result.choices.map(_.text).mkString(", "))
-    } yield ()
+      animal <- Console.readLine("Animal: ").orDie
+      _      <- (for {
+                  result <- Completions.createCompletion(
+                              model = Model.Predefined(Model.Models.`Text-davinci-003`),
+                              prompt = generatePrompt(animal),
+                              temperature = Temperature(0.6)
+                            )
+                  _      <- Console.printLine("Names: " + result.choices.map(_.text).mkString(", ")).orDie
+                } yield ()).when(animal.nonEmpty)
+    } yield animal.nonEmpty
 
   override def run =
-    loop.forever
+    loop
+      .repeatWhile(_ == true)
       .provide(
         Completions.default
       )
