@@ -292,6 +292,8 @@ trait APIGenerator {
                   q"""${Types.zio_.term}.fromEither(${Types.encoders.term}.toMultipartFormDataBody[${bodyType.typ}]($bodyParam, this.boundary))
                         .mapError(${Types.openAIFailure.term}.EncodingError(_))
                  """
+                case Some(RequestBody(ContentType.`application/octet-stream`, typ)) =>
+                    q"""${Types.zio_.term}.succeed(${Types.zhttpBody.term}.fromStream($bodyParam))"""
                 case None                                                      =>
                   q"""${Types.zio_.term}.succeed(${Types.zhttpBody.term}.empty)"""
               }
