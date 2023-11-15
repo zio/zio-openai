@@ -80,4 +80,11 @@ final case class Endpoint(
       body = body.map(_.transform(f)),
       response = response.map(_.transform(f))
     )
+
+  def allTypes: Set[TypeDefinition] = {
+    val params = parameters.map(_.typ).toSet
+    val bodyTypes = body.map(_.typ).toSet
+    val responseTypes = response.map(_.typ).toSet
+    params ++ bodyTypes ++ responseTypes
+  }
 }

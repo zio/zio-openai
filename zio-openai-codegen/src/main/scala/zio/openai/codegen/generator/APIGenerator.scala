@@ -278,9 +278,9 @@ trait APIGenerator {
 
             val url =
               if (hasQueryParams)
-                q"""baseURL.withPath(baseURL.path ++ $path).withQueryParams($queryParams)"""
+                q"""baseURL.path(baseURL.path ++ $path).queryParams($queryParams)"""
               else
-                q"""baseURL.withPath(baseURL.path ++ $path)"""
+                q"""baseURL.path(baseURL.path ++ $path)"""
 
             val body =
               endpoint.body match {
@@ -305,7 +305,7 @@ trait APIGenerator {
                 q"""${Types.zhttpHeader.term}.ContentType(${endpoint.bodyContentTypeAsMediaType})"""
 
             val request =
-              q"""${Types.zhttpRequest.term}.default(
+              q"""${Types.zhttpRequest.term}(
                method = ${endpoint.method.constructor.term},
                url = $url,
                body = body
@@ -319,6 +319,9 @@ trait APIGenerator {
                     if responseBody.contentType == ContentType.`application/json` =>
                   val responseType = responseBody.typ.scalaType(model)
                   q"""${Types.decoders.term}.tryDecodeJsonResponse[${responseType.typ}](this.codecs, req, response)"""
+                case Some(responseBody)
+                  if responseBody.contentType == ContentType.`application/octet-stream` =>
+                  q"""${Types.decoders.term}.tryDecodeBinaryResponse(req, response)"""
                 case None =>
                   q"""${Types.decoders.term}.validateEmptyResponse(req, response)"""
                 case _    =>
@@ -333,8 +336,10 @@ trait APIGenerator {
                   .typ} = {
                   $body.flatMap { body =>
                     val req = $request
-                    client.request(req).mapError(${Types.openAIFailure.term}.Unknown(_)).flatMap { response =>
-                      $mapResponse
+                    ${Types.zio_.term}.scoped {
+                      client.request(req).mapError(${Types.openAIFailure.term}.Unknown(_)).flatMap { response =>
+                        $mapResponse
+                      }
                     }
                   }
                 }
@@ -348,7 +353,7 @@ trait APIGenerator {
                   val streaming: Defn.Def =
                     q"""def ${endpoint.methodNameStreaming}(..$paramList): ${Types
                         .zstream(ScalaType.any, Types.openAIFailure, streamingResponseType)
-                        .typ} = ${Types.zstream_.term}.unwrap {
+                        .typ} = ${Types.zstream_.term}.unwrapScoped {
                           $body.flatMap { body =>
                             val req = $request
                             client.request(req).mapError(${Types.openAIFailure.term}.Unknown(_)).map { response =>

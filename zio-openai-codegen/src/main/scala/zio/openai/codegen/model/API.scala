@@ -10,6 +10,8 @@ final case class API(name: String, endpoints: List[Endpoint]) {
 
   def transform(f: TypeDefinition => TypeDefinition): API =
     copy(endpoints = endpoints.map(_.transform(f)))
+
+  def allTypes: Set[TypeDefinition] = endpoints.flatMap(_.allTypes).toSet
 }
 
 object API {
