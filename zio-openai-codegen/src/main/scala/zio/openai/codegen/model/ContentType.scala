@@ -5,16 +5,16 @@ import scala.meta._
 
 sealed trait ContentType {
   def asString: String = this match {
-    case ContentType.`application/json`    => "application/json"
-    case ContentType.`multipart/form-data` => "multipart/form-data"
+    case ContentType.`application/json`         => "application/json"
+    case ContentType.`multipart/form-data`      => "multipart/form-data"
     case ContentType.`application/octet-stream` => "application/octet-stream"
   }
 
   def asMediaType =
     this match {
-      case ContentType.`application/json`    =>
+      case ContentType.`application/json`         =>
         q"${Types.zhttpMediaType.term}.application.json"
-      case ContentType.`multipart/form-data` =>
+      case ContentType.`multipart/form-data`      =>
         q"${Types.zhttpMediaType.term}.multipart.`form-data`"
       case ContentType.`application/octet-stream` =>
         q"${Types.zhttpMediaType.term}.application.`octet-stream`"

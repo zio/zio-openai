@@ -22,6 +22,9 @@ object Encoders {
 
   trait URLSegmentEncoder[T] {
     def encode(value: T): String
+
+    def contramap[S](f: S => T): URLSegmentEncoder[S] =
+      (value: S) => encode(f(value))
   }
 
   object URLSegmentEncoder {

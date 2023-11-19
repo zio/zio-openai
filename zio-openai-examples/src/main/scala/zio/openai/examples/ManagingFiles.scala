@@ -1,10 +1,10 @@
 package zio.openai.examples
 
-import zio.{ Chunk, Console, ZIOAppDefault }
 import zio.openai.Files
-import zio.openai.model.{ File, FineTune }
-
-import java.nio.charset.StandardCharsets
+import zio.openai.model.CreateFileRequest.Purpose
+import zio.openai.model.File
+import zio.prelude.data.Optional
+import zio.{ Console, ZIOAppDefault }
 
 /** Based on https://beta.openai.com/docs/api-reference/files/list
   */
@@ -15,9 +15,9 @@ object ManagingFiles extends ZIOAppDefault {
       initialFiles <- Files.listFiles()
       r1           <- Files.createFile(
                         File.jsonl("""{"prompt": "<prompt text>", "completion": "<ideal generated text>"}"""),
-                        "fine-tune"
+                        Purpose.`Fine-tune`
                       )
-      _            <- Console.printLine(s"Upload status: ${r1.status.getOrElse("???")}")
+      _            <- Console.printLine(s"Upload status: ${r1.status}")
       middleFiles  <- Files.listFiles()
       r2           <- Files.downloadFile(r1.id)
       _            <- Console.printLine(s"Downloaded file's content: $r2")
