@@ -3,7 +3,7 @@ package zio.openai.codegen.generator
 import io.github.vigoo.metagen.core.*
 import zio.ZIO
 import zio.nio.file.Path
-import zio.openai.codegen.model.{ Field, Model, TypeDefinition }
+import zio.openai.codegen.model.{ Field, Model, TypeDefinition, UseCase }
 
 import scala.collection.mutable
 import scala.meta.*
@@ -62,7 +62,7 @@ trait ModelGenerator { this: HasParameters =>
     fields
       .filter(!_.controlsStreamingResponse || !filterStreamingControl)
       .map { field =>
-        val fieldType = field.typ.scalaType(model)
+        val fieldType = field.typ.scalaType(model, UseCase.Field)
         val fieldName = field.scalaNameTerm
 
         if (field.isNullable || !field.isRequired) {
@@ -103,7 +103,7 @@ trait ModelGenerator { this: HasParameters =>
     obj: TypeDefinition.Object
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, List[Stat]] = {
 
-    val typ = obj.scalaType(model)
+    val typ = obj.scalaType(model, UseCase.Field)
 
     val fields = getObjectFieldsAsParams(
       model,
@@ -121,7 +121,7 @@ trait ModelGenerator { this: HasParameters =>
     val caseClassName = ScalaType(Packages.zioSchema / "Schema", s"CaseClass${fields.size}")
 
     val fieldSchemas = obj.fields.map { field =>
-      val fieldType = field.typ.scalaType(model)
+      val fieldType = field.typ.scalaType(model, UseCase.Field)
 
       if (field.isNullable || !field.isRequired)
         q"""${Types.schemaField.term}(
@@ -201,7 +201,7 @@ trait ModelGenerator { this: HasParameters =>
     model: Model,
     obj: TypeDefinition.DynamicObject
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, List[Stat]] = {
-    val typ = obj.scalaType(model)
+    val typ = obj.scalaType(model, UseCase.Field)
 
     val knownFieldParams = getObjectFieldsAsParams(
       model,
@@ -211,7 +211,7 @@ trait ModelGenerator { this: HasParameters =>
     )
     val knownFieldGetters =
       obj.knownFields.map { field =>
-        val fieldType = field.typ.scalaType(model)
+        val fieldType = field.typ.scalaType(model, UseCase.Field)
         val fieldName = field.scalaNameTerm
 
         q"""def ${fieldName}: ${Types.optional(fieldType).typ} =
@@ -294,11 +294,11 @@ trait ModelGenerator { this: HasParameters =>
     alt: TypeDefinition.Alternatives
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, List[Stat]] = {
 
-    val typ = alt.scalaType(model)
+    val typ = alt.scalaType(model, UseCase.Field)
 
     val cases: List[Defn] =
       alt.constructors(model).flatMap { case (altCons, alt) =>
-        val altType = alt.scalaType(model)
+        val altType = alt.scalaType(model, UseCase.Field)
         List(
           q"""
             final case class ${altCons.typName}(value: ${altType.typ}) extends ${typ.init}
@@ -398,7 +398,7 @@ trait ModelGenerator { this: HasParameters =>
     enum: TypeDefinition.Enum
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, List[Stat]] = {
 
-    val typ = enum.scalaType(model)
+    val typ = enum.scalaType(model, UseCase.Field)
 
     val cases: List[Defn] =
       enum.values.map { value =>
@@ -415,11 +415,19 @@ trait ModelGenerator { this: HasParameters =>
       } :+ p"case other => ${Types.eitherLeft.term}[${ScalaType.string.typ}, ${typ.typ}](${Lit.String("Invalid value: ")} + other)"
     val fromString = q"(s: ${ScalaType.string.typ}) => s match { ..case $fromStringMatches }"
 
-    val toStringMatches =
+    val toEitherStringMatches =
       enum.values.map { value =>
         p"case ${Term.Name(
             value.capitalize
           )} => ${Types.eitherRight.term}[${ScalaType.string.typ}, ${ScalaType.string.typ}](${Lit.String(value)})"
+      }
+    val toEitherString = q"(s: ${typ.typ}) => s match { ..case $toEitherStringMatches }"
+
+    val toStringMatches =
+      enum.values.map { value =>
+        p"case ${Term.Name(
+            value.capitalize
+          )} => ${Lit.String(value)}"
       }
     val toString = q"(s: ${typ.typ}) => s match { ..case $toStringMatches }"
 
@@ -438,8 +446,11 @@ trait ModelGenerator { this: HasParameters =>
             implicit lazy val schema: ${Types.schemaOf(typ).typ} =
               ${Types.schema_.term}[${ScalaType.string.typ}].transformOrFail(
                   $fromString,
-                  $toString
+                  $toEitherString
               )
+
+            implicit lazy val urlSegmentEncoder: ${Types.urlSegmentEncoder(typ).typ} =
+              ${Types.urlSegmentEncoder_.term}.encodeString.contramap($toString)
 
            ..$cases
           }
@@ -451,19 +462,20 @@ trait ModelGenerator { this: HasParameters =>
     model: Model,
     smartNewTypes: List[TypeDefinition.SmartNewType]
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, Term.Block] =
-    ZIO
-      .foreach(smartNewTypes) { smartNewType =>
-        generateSmartNewType(model, smartNewType)
-      }
-      .map(_.flatten)
-      .map(Term.Block(_))
+    CodeFileGenerator.knownLocalName("Type") *>
+      ZIO
+        .foreach(smartNewTypes) { smartNewType =>
+          generateSmartNewType(model, smartNewType)
+        }
+        .map(_.flatten)
+        .map(Term.Block(_))
 
   private def generateSmartNewType(
     model: Model,
     smartNewType: TypeDefinition.SmartNewType
   ): ZIO[CodeFileGenerator, OpenAIGeneratorFailure, List[Stat]] = {
 
-    val typ = smartNewType.scalaType(model)
+    val typ = smartNewType.scalaType(model, UseCase.Field)
     val sup =
       smartNewType match {
         case _: TypeDefinition.ConstrainedInteger =>

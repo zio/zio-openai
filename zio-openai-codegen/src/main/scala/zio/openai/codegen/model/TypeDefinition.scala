@@ -14,7 +14,7 @@ sealed trait TypeDefinition {
 
   def verboseName: String = name.capitalize
 
-  def scalaType(model: Model): ScalaType
+  def scalaType(model: Model, useCase: UseCase): ScalaType
 
   def transform(f: TypeDefinition => TypeDefinition): TypeDefinition =
     this match {
@@ -84,12 +84,12 @@ object TypeDefinition {
 
     val scalaName: String = toPascalCase(directName)
 
-    override def scalaType(model: Model): ScalaType =
+    override def scalaType(model: Model, useCase: UseCase): ScalaType =
       parentName match {
         case Some(parentName) =>
           model.finalTypes.get(parentName) match {
             case Some(parentType) =>
-              parentType.scalaType(model) / scalaName
+              parentType.scalaType(model, useCase) / scalaName
             case None             => ScalaType(Packages.models, scalaName)
           }
         case None             => ScalaType(Packages.models, scalaName)
@@ -118,7 +118,7 @@ object TypeDefinition {
     override val name: String = "boolean"
     override val description: Option[String] = None
 
-    override def scalaType(model: Model): ScalaType =
+    override def scalaType(model: Model, useCase: UseCase): ScalaType =
       ScalaType.boolean
   }
 
@@ -126,7 +126,7 @@ object TypeDefinition {
     override val name: String = "string"
     override val description: Option[String] = None
 
-    override def scalaType(model: Model): ScalaType =
+    override def scalaType(model: Model, useCase: UseCase): ScalaType =
       ScalaType.string
   }
 
@@ -146,15 +146,19 @@ object TypeDefinition {
     override val name: String = "binary"
     override val description: Option[String] = None
 
-    override def scalaType(model: Model): ScalaType =
-      Types.file
+    override def scalaType(model: Model, useCase: UseCase): ScalaType =
+      useCase match {
+        case UseCase.Field    => Types.file
+        case UseCase.Request  => Types.file
+        case UseCase.Response => Types.chunkOf(ScalaType.byte)
+      }
   }
 
   final case object PrimitiveInteger extends TypeDefinition {
     override val name: String = "integer"
     override val description: Option[String] = None
 
-    override def scalaType(model: Model): ScalaType =
+    override def scalaType(model: Model, useCase: UseCase): ScalaType =
       ScalaType.int
   }
 
@@ -174,7 +178,7 @@ object TypeDefinition {
     override val name: String = "number"
     override val description: Option[String] = None
 
-    override def scalaType(model: Model): ScalaType =
+    override def scalaType(model: Model, useCase: UseCase): ScalaType =
       ScalaType.double
   }
 
@@ -196,8 +200,8 @@ object TypeDefinition {
 
     override val verboseName: String = s"ArrayOf${itemType.verboseName}"
 
-    override def scalaType(model: Model): ScalaType =
-      Types.chunkOf(itemType.scalaType(model))
+    override def scalaType(model: Model, useCase: UseCase): ScalaType =
+      Types.chunkOf(itemType.scalaType(model, useCase))
   }
 
   final case class NonEmptyArray(itemType: TypeDefinition) extends TypeDefinition {
@@ -206,8 +210,8 @@ object TypeDefinition {
 
     override val verboseName: String = s"ArrayOf${itemType.verboseName}"
 
-    override def scalaType(model: Model): ScalaType =
-      Types.nonEmptyChunkOf(itemType.scalaType(model))
+    override def scalaType(model: Model, useCase: UseCase): ScalaType =
+      Types.nonEmptyChunkOf(itemType.scalaType(model, useCase))
   }
 
   final case class ConstrainedArray(itemType: TypeDefinition, min: Int, max: Int)
@@ -217,8 +221,8 @@ object TypeDefinition {
 
     override val verboseName: String = s"ArrayOf${itemType.verboseName}"
 
-    override def scalaType(model: Model): ScalaType =
-      Types.chunkOf(itemType.scalaType(model)) // TODO
+    override def scalaType(model: Model, useCase: UseCase): ScalaType =
+      Types.chunkOf(itemType.scalaType(model, useCase)) // TODO
   }
 
   final case class Alternatives(
@@ -255,7 +259,7 @@ object TypeDefinition {
       }
 
     def constructors(model: Model): List[(ScalaType, TypeDefinition)] = {
-      val typ = scalaType(model)
+      val typ = scalaType(model, UseCase.Field)
 
       alternatives.zip(caseNames).map { case (alt, caseName) =>
         typ / caseName -> model.resolve(alt)
@@ -278,8 +282,8 @@ object TypeDefinition {
     val referencedName: String = name.stripPrefix("#/components/schemas/")
     override val verboseName: String = referencedName.capitalize
 
-    override def scalaType(model: Model): ScalaType =
-      model.types(referencedName).scalaType(model)
+    override def scalaType(model: Model, useCase: UseCase): ScalaType =
+      model.types(referencedName).scalaType(model, useCase)
   }
 
   final case class DynamicObject(

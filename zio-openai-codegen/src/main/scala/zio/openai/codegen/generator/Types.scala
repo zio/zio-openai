@@ -72,6 +72,10 @@ object Types {
   def dynamicObjectOf(self: ScalaType): ScalaType =
     ScalaType(Packages.internal, "DynamicObject", self)
   val encoders: ScalaType = ScalaType(Packages.internal, "Encoders")
+  def urlSegmentEncoder(t: ScalaType): ScalaType =
+    ScalaType(Packages.internal / "Encoders", "URLSegmentEncoder", t)
+  val urlSegmentEncoder_ : ScalaType =
+    ScalaType(Packages.internal / "Encoders", "URLSegmentEncoder")
   val file: ScalaType = ScalaType(Packages.models, "File")
   val openAIFailure: ScalaType = ScalaType(Packages.models, "OpenAIFailure")
 }

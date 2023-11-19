@@ -30,7 +30,7 @@ final case class Endpoint(
 
   def responseType(model: Model): ScalaType =
     response match {
-      case Some(ResponseBody(_, typ)) => typ.scalaType(model)
+      case Some(ResponseBody(_, typ)) => typ.scalaType(model, UseCase.Response)
       case None                       => ScalaType.unit
     }
 
@@ -38,9 +38,9 @@ final case class Endpoint(
     name match {
       case "createChatCompletion" =>
         // NOTE: not defined properly in the OpenAPI spec
-        model.finalTypes("CreateChatCompletionStreamResponse").scalaType(model)
+        model.finalTypes("CreateChatCompletionStreamResponse").scalaType(model, UseCase.Response)
       case "createCompletion"     =>
-        model.finalTypes("CreateCompletionResponse").scalaType(model)
+        model.finalTypes("CreateCompletionResponse").scalaType(model, UseCase.Response)
       case _                      =>
         responseType(model)
     }
@@ -80,4 +80,11 @@ final case class Endpoint(
       body = body.map(_.transform(f)),
       response = response.map(_.transform(f))
     )
+
+  def allTypes: Set[TypeDefinition] = {
+    val params = parameters.map(_.typ).toSet
+    val bodyTypes = body.map(_.typ).toSet
+    val responseTypes = response.map(_.typ).toSet
+    params ++ bodyTypes ++ responseTypes
+  }
 }

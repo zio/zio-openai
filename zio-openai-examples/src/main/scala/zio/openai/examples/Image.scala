@@ -3,7 +3,8 @@ package zio.openai.examples
 import zio.nio.file.{ Files, Path }
 import zio.{ Chunk, Console, ZIO, ZIOAppDefault }
 import zio.openai.Images
-import zio.openai.model.{ N, ResponseFormat, Size }
+import zio.openai.model.CreateImageRequest.Size
+import zio.openai.model.{ N, ResponseFormat }
 
 import java.util.Base64
 

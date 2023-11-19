@@ -1,6 +1,6 @@
 package zio.openai.internal
 
-import zio.ZIO
+import zio.{ Chunk, ZIO }
 import zio.constraintless.{ IsElementOf, TypeList }
 import zio.http.Status
 import zio.http.{ Request, Response }
@@ -10,6 +10,17 @@ import zio.schema.codec.{ BinaryCodecs, JsonCodec }
 import java.nio.charset.StandardCharsets
 
 private[openai] object Decoders {
+
+  def tryDecodeBinaryResponse(
+    request: Request,
+    response: Response
+  ): ZIO[Any, OpenAIFailure, Chunk[Byte]] =
+    if (response.status == Status.Ok) {
+      response.body.asChunk
+        .mapError(OpenAIFailure.Unknown(_))
+    } else {
+      failWithErrorResponse(request, response)
+    }
 
   def tryDecodeJsonResponse[T]: TryDecodeJsonResponse[T] = new TryDecodeJsonResponse[T](())
 

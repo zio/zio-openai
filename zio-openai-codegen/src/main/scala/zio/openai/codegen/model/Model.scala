@@ -9,7 +9,8 @@ final case class Model(
   initialAPIs: List[API]
 ) {
   private lazy val allTypes: Map[String, TypeDefinition] =
-    Model.collectReferencedTypes(types.values.toSeq)
+    Model.collectReferencedTypes(types.values.toSeq) ++
+      Model.collectReferencedTypes(initialAPIs.flatMap(api => api.allTypes))
 
   lazy val finalTypes: Map[String, TypeDefinition] =
     allTypes.mapValues(_.transform(unifyTypes))

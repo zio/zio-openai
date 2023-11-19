@@ -10,7 +10,8 @@ import zio.openai.codegen.model.{
   Model,
   RequestBody,
   ResponseBody,
-  TypeDefinition
+  TypeDefinition,
+  UseCase
 }
 
 import scala.meta.*
@@ -80,7 +81,7 @@ trait APIGenerator {
 
             endpoint.hasSingleBodyParameter(model) match {
               case Some(obj) =>
-                val cons = endpoint.body.get.typ.scalaType(model).term
+                val cons = endpoint.body.get.typ.scalaType(model, UseCase.Request).term
                 val fieldList = getObjectFieldsAsParams(
                   model,
                   obj.fields,
@@ -163,7 +164,7 @@ trait APIGenerator {
 
             endpoint.hasSingleBodyParameter(model) match {
               case Some(obj) =>
-                val cons = endpoint.body.get.typ.scalaType(model).term
+                val cons = endpoint.body.get.typ.scalaType(model, UseCase.Request).term
                 val fieldList = getObjectFieldsAsParams(
                   model,
                   obj.fields,
@@ -278,21 +279,23 @@ trait APIGenerator {
 
             val url =
               if (hasQueryParams)
-                q"""baseURL.withPath(baseURL.path ++ $path).withQueryParams($queryParams)"""
+                q"""baseURL.path(baseURL.path ++ $path).queryParams($queryParams)"""
               else
-                q"""baseURL.withPath(baseURL.path ++ $path)"""
+                q"""baseURL.path(baseURL.path ++ $path)"""
 
             val body =
               endpoint.body match {
-                case Some(RequestBody(ContentType.`application/json`, typ))    =>
-                  val bodyType = typ.scalaType(model)
+                case Some(RequestBody(ContentType.`application/json`, typ))         =>
+                  val bodyType = typ.scalaType(model, UseCase.Response)
                   q"""${Types.zio_.term}.succeed(${Types.encoders.term}.toJsonBody[${bodyType.typ}](this.codecs, $bodyParam))"""
-                case Some(RequestBody(ContentType.`multipart/form-data`, typ)) =>
-                  val bodyType = typ.scalaType(model)
+                case Some(RequestBody(ContentType.`multipart/form-data`, typ))      =>
+                  val bodyType = typ.scalaType(model, UseCase.Response)
                   q"""${Types.zio_.term}.fromEither(${Types.encoders.term}.toMultipartFormDataBody[${bodyType.typ}]($bodyParam, this.boundary))
                         .mapError(${Types.openAIFailure.term}.EncodingError(_))
                  """
-                case None                                                      =>
+                case Some(RequestBody(ContentType.`application/octet-stream`, typ)) =>
+                  q"""${Types.zio_.term}.succeed(${Types.zhttpBody.term}.fromStream($bodyParam))"""
+                case None                                                           =>
                   q"""${Types.zio_.term}.succeed(${Types.zhttpBody.term}.empty)"""
               }
 
@@ -303,7 +306,7 @@ trait APIGenerator {
                 q"""${Types.zhttpHeader.term}.ContentType(${endpoint.bodyContentTypeAsMediaType})"""
 
             val request =
-              q"""${Types.zhttpRequest.term}.default(
+              q"""${Types.zhttpRequest.term}(
                method = ${endpoint.method.constructor.term},
                url = $url,
                body = body
@@ -315,8 +318,11 @@ trait APIGenerator {
               endpoint.response match {
                 case Some(responseBody)
                     if responseBody.contentType == ContentType.`application/json` =>
-                  val responseType = responseBody.typ.scalaType(model)
+                  val responseType = responseBody.typ.scalaType(model, UseCase.Response)
                   q"""${Types.decoders.term}.tryDecodeJsonResponse[${responseType.typ}](this.codecs, req, response)"""
+                case Some(responseBody)
+                    if responseBody.contentType == ContentType.`application/octet-stream` =>
+                  q"""${Types.decoders.term}.tryDecodeBinaryResponse(req, response)"""
                 case None =>
                   q"""${Types.decoders.term}.validateEmptyResponse(req, response)"""
                 case _    =>
@@ -331,8 +337,10 @@ trait APIGenerator {
                   .typ} = {
                   $body.flatMap { body =>
                     val req = $request
-                    client.request(req).mapError(${Types.openAIFailure.term}.Unknown(_)).flatMap { response =>
-                      $mapResponse
+                    ${Types.zio_.term}.scoped {
+                      client.request(req).mapError(${Types.openAIFailure.term}.Unknown(_)).flatMap { response =>
+                        $mapResponse
+                      }
                     }
                   }
                 }
@@ -346,7 +354,7 @@ trait APIGenerator {
                   val streaming: Defn.Def =
                     q"""def ${endpoint.methodNameStreaming}(..$paramList): ${Types
                         .zstream(ScalaType.any, Types.openAIFailure, streamingResponseType)
-                        .typ} = ${Types.zstream_.term}.unwrap {
+                        .typ} = ${Types.zstream_.term}.unwrapScoped {
                           $body.flatMap { body =>
                             val req = $request
                             client.request(req).mapError(${Types.openAIFailure.term}.Unknown(_)).map { response =>
@@ -377,16 +385,15 @@ trait APIGenerator {
       jsonTypes = api.endpoints.flatMap { endpoint =>
                     endpoint.body.toList.collect {
                       case RequestBody(ContentType.`application/json`, typ) =>
-                        typ
+                        typ.scalaType(model, UseCase.Request)
                     } ++
                       endpoint.response.toList.collect {
                         case ResponseBody(ContentType.`application/json`, typ) =>
-                          typ
+                          typ.scalaType(model, UseCase.Response)
                       }
                   }
 
-      typeList = jsonTypes.foldRight[Type](Types.typeListEnd.typ) { (typ, lst) =>
-                   val scalaType = typ.scalaType(model)
+      typeList = jsonTypes.foldRight[Type](Types.typeListEnd.typ) { (scalaType, lst) =>
                    t"""${scalaType.typ} :: $lst"""
                  }
       codecs   =
@@ -460,14 +467,16 @@ trait APIGenerator {
 
   private def getParamList(model: Model, endpoint: Endpoint): List[Term.Param] =
     endpoint.parameters.map { param =>
-      val paramTyp = param.typ.scalaType(model)
+      val paramTyp = param.typ.scalaType(model, UseCase.Request)
       if (param.isRequired) {
         param"""${param.paramName}: ${paramTyp.typ}"""
       } else {
-        param"""${param.paramName}: ${Types.optional(paramTyp).typ}"""
+        param"""${param.paramName}: ${Types
+            .optional(paramTyp)
+            .typ} = ${Types.optionalAbsent.term}"""
       }
     } ++ endpoint.body.toList.map { body =>
-      val bodyTyp = body.typ.scalaType(model)
+      val bodyTyp = body.typ.scalaType(model, UseCase.Request)
       param"""body: ${bodyTyp.typ}"""
     }
 
