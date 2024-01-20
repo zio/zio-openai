@@ -11,10 +11,10 @@ addSbtPlugin("org.portable-scala"                % "sbt-scala-native-crossprojec
 addSbtPlugin("org.portable-scala"                % "sbt-scalajs-crossproject"      % "1.3.1")
 addSbtPlugin("org.scala-js"                      % "sbt-scalajs"                   % "1.13.1")
 addSbtPlugin("org.scala-native"                  % "sbt-scala-native"              % "0.4.16")
-addSbtPlugin("org.scalameta"                     % "sbt-mdoc"                      % "2.4.0")
+addSbtPlugin("org.scalameta"                     % "sbt-mdoc"                      % "2.5.2")
 addSbtPlugin("org.scalameta"                     % "sbt-scalafmt"                  % "2.5.0")
 addSbtPlugin("pl.project13.scala"                % "sbt-jcstress"                  % "0.2.0")
-addSbtPlugin("pl.project13.scala"                % "sbt-jmh"                       % "0.4.5")
+addSbtPlugin("pl.project13.scala"                % "sbt-jmh"                       % "0.4.7")
 addSbtPlugin("com.timushev.sbt"                  % "sbt-updates"                   % "0.6.4")
 addSbtPlugin("dev.zio"                           % "zio-sbt-website"               % "0.3.10")
 
