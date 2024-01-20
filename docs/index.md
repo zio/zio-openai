@@ -42,7 +42,7 @@ object Quickstart extends ZIOAppDefault {
     for {
       animal <- Console.readLine("Animal: ")
       result <- Completions.createCompletion(
-        model = Model.Predefined(Models.`Text-davinci-003`),
+        model = Model.Predefined(Models.`Gpt-3.5-turbo-instruct`),
         prompt = generatePrompt(animal),
         temperature = Temperature(0.6)
       )
