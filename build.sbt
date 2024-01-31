@@ -86,7 +86,6 @@ lazy val docs = project
     projectName                                := "ZIO OpenAI",
     mainModuleName                             := (zioOpenAI / moduleName).value,
     projectStage                               := ProjectStage.ProductionReady,
-    docsPublishBranch                          := "main",
     ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(zioOpenAI)
   )
   .dependsOn(zioOpenAI)
