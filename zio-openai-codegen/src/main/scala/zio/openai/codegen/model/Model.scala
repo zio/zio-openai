@@ -60,13 +60,18 @@ final case class Model(
   private def unifyEnums(
     allEnums: List[TypeDefinition.Enum]
   ): (List[TypeDefinition.Enum], Map[TypeDefinition.Enum, TypeDefinition.Enum]) = {
-    val grouped = allEnums.groupBy(enum => (enum.directName, enum.values))
+    val grouped = allEnums.groupBy(enum => enum.directName).mapValues(_.groupBy(enum => enum.values))
     allEnums.foldLeft(
       (List.empty[TypeDefinition.Enum], Map.empty[TypeDefinition.Enum, TypeDefinition.Enum])
     ) { case ((result, mapping), enum) =>
-      val group = grouped((enum.directName, enum.values))
+      val nameGroup = grouped(enum.directName)
+      val valueGroup = nameGroup(enum.values)
+      // if there are multiple different groups that need to be unified and share the same name,
+      // we don't want to unify since the different groups will overwrite each other
+      val hasMultipleUnificationGroups = nameGroup.filter(_._2.size > 1).size > 1
       if (
-        group.size == 1 ||
+        hasMultipleUnificationGroups ||
+        valueGroup.size == 1 ||
         enum.directName == "CaseType0" || // We don't want to move these generated cases into top level
         enum.directName == "CaseType1" ||
         enum.directName == "CaseType2" ||
