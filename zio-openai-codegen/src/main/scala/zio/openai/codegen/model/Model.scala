@@ -66,8 +66,11 @@ final case class Model(
     ) { case ((result, mapping), enum) =>
       val nameGroup = grouped(enum.directName)
       val valueGroup = nameGroup(enum.values)
+      // if there are multiple different groups that need to be unified and share the same name,
+      // we don't want to unify since the different groups will overwrite each other
+      val hasMultipleUnificationGroups = nameGroup.filter(_._2.size > 1).size > 1
       if (
-        nameGroup.size > 1 || // we don't want to unify since the different groups will overwrite each other
+        hasMultipleUnificationGroups ||
         valueGroup.size == 1 ||
         enum.directName == "CaseType0" || // We don't want to move these generated cases into top level
         enum.directName == "CaseType1" ||
