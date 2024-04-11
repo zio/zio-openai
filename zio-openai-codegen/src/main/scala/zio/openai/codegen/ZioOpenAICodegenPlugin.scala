@@ -98,6 +98,14 @@ object ZioOpenAICodegenPlugin extends AutoPlugin {
 
   override def projectSettings: Seq[Def.Setting[?]] =
     Seq(
-      Compile / sourceGenerators += generateSources.taskValue
+      Compile / sourceGenerators += generateSources.taskValue,
+      // adds generated files to the sources jar. See sbt/sbt#2205
+      Compile / packageSrc / mappings ++= {
+        val base = (Compile / sourceManaged).value
+        val files = (Compile / managedSources).value
+        files
+          .map(f => (f, f.relativeTo(base)))
+          .collect { case (f, Some(relF)) => f -> relF.getPath() }
+      }
     )
 }
